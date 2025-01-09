@@ -1,0 +1,7 @@
+__pycache__/
+
+# model checkpoints
+*.pt
+
+# used in wsl
+*:Zone.Identifier
