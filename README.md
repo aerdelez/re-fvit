@@ -1,7 +1,12 @@
 # fact-ai
 
-## Setup
+## Fixes
 
+1. Removed package versions from env.yaml file.
+2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
+3. Added `modules/` module from https://github.com/hila-chefer/Transformer-Explainability.
+
+## Setup
 
 1. Change working directory to `FViT-main` with `cd FViT-main`.
 
