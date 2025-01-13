@@ -289,8 +289,8 @@ for batch_idx, (image, labels) in enumerate(iterator):
     else:
         images = image.cuda()
     labels = labels.cuda()
-    # print("image", image.shape)
-    # print("lables", labels.shape)
+    print("image", image.shape)
+    print("lables", labels.shape)
 
     correct, labeled, inter, union, ap, f1, pred, target = eval_batch(images, labels, model, batch_idx)
 

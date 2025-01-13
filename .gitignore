@@ -1,6 +1,9 @@
 __pycache__/
 FViT-main/fig/
 
+# data
+*.mat
+
 # model checkpoints
 *.pt
 
