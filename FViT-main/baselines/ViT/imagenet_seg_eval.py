@@ -14,7 +14,8 @@ from utils import render
 from utils.saver import Saver
 from utils.iou import IoU
 
-from data.Imagenet import Imagenet_Segmentation
+# fixed typo
+from data.imagenet import Imagenet_Segmentation
 
 from ViT_explanation_generator import Baselines, LRP
 from ViT_new import vit_base_patch16_224

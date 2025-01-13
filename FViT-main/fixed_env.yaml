@@ -229,4 +229,9 @@ dependencies:
     - watchdog
     - wcwidth
     - zipp
+      # manually added - STIPE
+    - scikit-learn
+    - imageio
+    - scikit-image
+    - h5py
 prefix: fvit
