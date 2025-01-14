@@ -7,20 +7,27 @@ import argparse
 from PIL import Image
 import imageio
 import os
+import sys
+import inspect
 from tqdm import tqdm
 from utils.metrices import *
 
-from utils import render
-from utils.saver import Saver
-from utils.iou import IoU
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+parentdir = os.path.dirname(parentdir)
+sys.path.insert(0, parentdir) 
 
-# fixed typo
-from data.imagenet import Imagenet_Segmentation
+from baselines.ViT.utils import render
+from baselines.ViT.utils.saver import Saver
+from baselines.ViT.utils.iou import IoU
 
-from ViT_explanation_generator import Baselines, LRP
-from ViT_new import vit_base_patch16_224
-from ViT_LRP import vit_base_patch16_224 as vit_LRP
-from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.data.imagenet import Imagenet_Segmentation
+
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP
+from baselines.ViT.ViT_new import vit_base_patch16_224
+from baselines.ViT.ViT_LRP import vit_base_patch16_224 as vit_LRP
+from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -65,7 +72,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=[ 'rollout', 'lrp','transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                              'attn_last_layer', 'attn_gradcam'],
+                              'attn_last_layer', 'attn_gradcam', 'dds'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -210,6 +217,20 @@ def eval_batch(image, labels, evaluator, index):
     elif args.method == 'attn_gradcam':
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
 
+    elif args.method == 'dds':
+        # noise level like in the demo, to be changed later possibly
+        noise_level = 5 / 255
+        steps=1000
+        start=0.0001
+        end=0.02
+        opt_t = get_opt_t(noise_level, start, end, steps)
+        # for now i'll keep the order like in the demo
+        image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
+        image = image + torch.randn_like(image, ) * noise_level
+        image = torch.clamp(image, -1, 1)
+        # using transformer attribution because that's what they used in the demo
+        Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
         Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
@@ -267,8 +288,8 @@ def eval_batch(image, labels, evaluator, index):
     batch_label += labeled
     batch_inter += inter
     batch_union += union
-    # print("output", output.shape)
-    # print("ap labels", labels.shape)
+    #print("output", output.shape)
+    #print("ap labels", labels.shape)
     # ap = np.nan_to_num(get_ap_scores(output, labels))
     ap = np.nan_to_num(get_ap_scores(output_AP, labels))
     f1 = np.nan_to_num(get_f1_scores(output[0, 1].data.cpu(), labels[0]))
@@ -289,8 +310,8 @@ for batch_idx, (image, labels) in enumerate(iterator):
     else:
         images = image.cuda()
     labels = labels.cuda()
-    print("image", image.shape)
-    print("lables", labels.shape)
+    #print("image", image.shape)
+    #print("lables", labels.shape)
 
     correct, labeled, inter, union, ap, f1, pred, target = eval_batch(images, labels, model, batch_idx)
 
@@ -312,6 +333,20 @@ for batch_idx, (image, labels) in enumerate(iterator):
 
 predictions = np.concatenate(predictions)
 targets = np.concatenate(targets)
+
+def accuracy(predictions, targets):
+    acc = 0
+    total = 0
+    for pred, truth in zip(predictions, targets):
+        print(pred)
+        print(truth)
+        total += 1
+        if pred == truth:
+            acc += 1
+
+    return acc / total
+
+acc = accuracy(predictions, targets)
 pr, rc, thr = precision_recall_curve(targets, predictions)
 np.save(os.path.join(saver.experiment_dir, 'precision.npy'), pr)
 np.save(os.path.join(saver.experiment_dir, 'recall.npy'), rc)
@@ -327,9 +362,11 @@ print("Mean IoU over %d classes: %.4f\n" % (2, mIoU))
 print("Pixel-wise Accuracy: %2.2f%%\n" % (pixAcc * 100))
 print("Mean AP over %d classes: %.4f\n" % (2, mAp))
 print("Mean F1 over %d classes: %.4f\n" % (2, mF1))
+print(f"Classification accuracy: {acc}")
 
 fh.write("Mean IoU over %d classes: %.4f\n" % (2, mIoU))
 fh.write("Pixel-wise Accuracy: %2.2f%%\n" % (pixAcc * 100))
 fh.write("Mean AP over %d classes: %.4f\n" % (2, mAp))
 fh.write("Mean F1 over %d classes: %.4f\n" % (2, mF1))
+fh.write(f"Classification accuracy: {acc}")
 fh.close()

@@ -9,3 +9,6 @@ FViT-main/fig/
 
 # used in wsl
 *:Zone.Identifier
+
+# output saving
+run/
