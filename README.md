@@ -2,7 +2,9 @@
 
 ## Issues
 
-1. `ViT_LRP.py` and other files import modules with prefix `baselines.ViT.` except it's located in that module. This is correct for running the notebook from the 'root' directory, but not for `imagenet_seg_eval.py` which has the same location as `ViT_LRP.py` and other files. I removed the prefix in this branch since I am trying to run `imagenet_seg_eval.py`.
+1. `ViT_LRP.py` and other files import modules with prefix `baselines.ViT.` except it's located in that module. This is correct for running the notebook from the 'root' directory, but not for `imagenet_seg_eval.py` which has the same location as `ViT_LRP.py` and other files. I removed the prefix in this branch since I am trying to run `imagenet_seg_eval.py`. 
+
+Alternative approach: I added some sys.path shenanigans in the `imagenet_set_eval.py` such that we can keep the prefixes and also execute the sctipt :).
 
 2. No code to test classification/segmentation accuracy?
 
@@ -25,3 +27,7 @@
 4. Copy the `256x256_diffusion_uncond.pt` model checkpoint from https://github.com/openai/guided-diffusion to the `guided-diffusion/models` directory.
 
 5. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
+
+## Running the Experiments
+
+Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method='dds'`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `method='dds` makes the script utilise Denoised Diffusion Smoothing.  
