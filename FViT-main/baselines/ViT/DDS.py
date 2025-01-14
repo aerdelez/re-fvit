@@ -7,6 +7,7 @@ import numpy as np
 import torch as th
 import torch.distributed as dist
 import torchvision.transforms as transforms
+import torchattacks
 
 from guided_diffusion import dist_util, logger
 from guided_diffusion.script_util import (
@@ -155,3 +156,19 @@ trans_to_256= transforms.Compose([
 trans_to_224= transforms.Compose([
    transforms.Resize((224, 224)),])
 delta_range = range_of_delta(start, end, steps)
+
+def attack(image, model, noise_level, label_index=None, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
+    th.backends.cudnn.deterministic = True
+    atk = torchattacks.PGD(model, eps=noise_level, alpha=noise_level/5, steps=10)
+    atk.set_normalization_used(mean, std)
+    labels = th.FloatTensor([0]*1000)
+    if label_index == None:
+        # with torch.no_grad():
+        logits = model(image)
+        label_index = logits.argmax()
+        # print(label_index)
+
+    labels[label_index] = 1
+    labels = labels.reshape(1, 1000)
+    adv_images = atk(image, labels.float())
+    return adv_images

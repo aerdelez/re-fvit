@@ -27,7 +27,7 @@ from baselines.ViT.ViT_explanation_generator import Baselines, LRP
 from baselines.ViT.ViT_new import vit_base_patch16_224
 from baselines.ViT.ViT_LRP import vit_base_patch16_224 as vit_LRP
 from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
-from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
+from baselines.ViT.DDS import denoise, get_opt_t, attack, trans_to_224, trans_to_256
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -100,6 +100,7 @@ parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
+parser.add_argument('--attack', type = bool, default = False)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -193,10 +194,15 @@ def eval_batch(image, labels, evaluator, index):
     
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
+        if args.attack:
+            image = attack(image, model, 5/255)
+
         Res = baselines.generate_rollout(image.cuda(), start_layer=1).reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
+        if args.attack:
+            image = attack(image, model_LRP, 5/255)
         Res = orig_lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
     
     # segmentation test for our method
@@ -205,19 +211,27 @@ def eval_batch(image, labels, evaluator, index):
     
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
+        if args.attack:
+            image = attack(image, model_orig_LRP, 5/255)
         Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
+        if args.attack:
+            image = attack(image, model_orig_LRP, 5/255)
         Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
+        if args.attack:
+            image = attack(image, model, 5/255)
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
+        if args.attack:
+            image = attack(image, model, 5/255)
         # noise level like in the demo, to be changed later possibly
         noise_level = 5 / 255
         steps=1000
@@ -334,19 +348,6 @@ for batch_idx, (image, labels) in enumerate(iterator):
 predictions = np.concatenate(predictions)
 targets = np.concatenate(targets)
 
-def accuracy(predictions, targets):
-    acc = 0
-    total = 0
-    for pred, truth in zip(predictions, targets):
-        print(pred)
-        print(truth)
-        total += 1
-        if pred == truth:
-            acc += 1
-
-    return acc / total
-
-acc = accuracy(predictions, targets)
 pr, rc, thr = precision_recall_curve(targets, predictions)
 np.save(os.path.join(saver.experiment_dir, 'precision.npy'), pr)
 np.save(os.path.join(saver.experiment_dir, 'recall.npy'), rc)
@@ -362,11 +363,9 @@ print("Mean IoU over %d classes: %.4f\n" % (2, mIoU))
 print("Pixel-wise Accuracy: %2.2f%%\n" % (pixAcc * 100))
 print("Mean AP over %d classes: %.4f\n" % (2, mAp))
 print("Mean F1 over %d classes: %.4f\n" % (2, mF1))
-print(f"Classification accuracy: {acc}")
 
 fh.write("Mean IoU over %d classes: %.4f\n" % (2, mIoU))
 fh.write("Pixel-wise Accuracy: %2.2f%%\n" % (pixAcc * 100))
 fh.write("Mean AP over %d classes: %.4f\n" % (2, mAp))
 fh.write("Mean F1 over %d classes: %.4f\n" % (2, mF1))
-fh.write(f"Classification accuracy: {acc}")
 fh.close()
