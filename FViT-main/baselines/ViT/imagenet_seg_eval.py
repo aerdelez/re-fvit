@@ -24,8 +24,10 @@ from baselines.ViT.utils.iou import IoU
 from baselines.ViT.data.imagenet import Imagenet_Segmentation
 
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP
-from baselines.ViT.ViT_new import vit_base_patch16_224
-from baselines.ViT.ViT_LRP import vit_base_patch16_224 as vit_LRP
+# changed these two imports to match demo
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
+from baselines.ViT.ViT_LRP import vit_base_patch16_224 
+
 from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 from baselines.ViT.DDS import denoise, get_opt_t, attack, trans_to_224, trans_to_256
 
@@ -100,7 +102,7 @@ parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
-parser.add_argument('--attack', type = bool, default = False)
+parser.add_argument('--attack', action='store_true', default = False)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -143,13 +145,12 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
 
 # Model
-model = vit_base_patch16_224(pretrained=True).cuda()
+model = vit_for_cam(pretrained=True).cuda()
 baselines = Baselines(model)
 
 # LRP
-model_LRP = vit_LRP(pretrained=True).cuda()
-model_LRP.eval()
-lrp = LRP(model_LRP)
+model = vit_base_patch16_224(pretrained=True).cuda()
+lrp = LRP(model)
 
 # orig LRP
 model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
@@ -191,47 +192,49 @@ def eval_batch(image, labels, evaluator, index):
 
     image = image.requires_grad_()
     predictions = evaluator(image)
+    attack_noise = 8/255
     
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
         if args.attack:
-            image = attack(image, model, 5/255)
+            image = attack(image, model, attack_noise)
 
-        Res = baselines.generate_rollout(image.cuda(), start_layer=1).reshape(batch_size, 1, 14, 14)
+        Res = lrp.generate_LRP(image.cuda(), method="rollout").reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
         if args.attack:
-            image = attack(image, model_LRP, 5/255)
-        Res = orig_lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
+            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
     
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+        Res = lrp.generate_LRP(image.cuda(), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
         if args.attack:
-            image = attack(image, model_orig_LRP, 5/255)
-        Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
+            image = attack(image, model_orig_LRP, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
         if args.attack:
-            image = attack(image, model_orig_LRP, 5/255)
-        Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
+            image = attack(image, model_orig_LRP, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
         if args.attack:
-            image = attack(image, model, 5/255)
+            image = attack(image, model, attack_noise)
+        # could be different look demo
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
         if args.attack:
-            image = attack(image, model, 5/255)
+            image = attack(image, model, attack_noise)
         # noise level like in the demo, to be changed later possibly
         noise_level = 5 / 255
         steps=1000
@@ -251,7 +254,8 @@ def eval_batch(image, labels, evaluator, index):
     
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
-
+    
+    # i think this is necessary for segmentation eval, hence not in the demo
     ret = Res.mean()
 
     Res_1 = Res.gt(ret).type(Res.type())
