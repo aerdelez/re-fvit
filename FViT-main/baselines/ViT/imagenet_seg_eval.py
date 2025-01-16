@@ -103,6 +103,7 @@ parser.add_argument('--is-ablation', type=bool,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default = False)
+parser.add_argument('--attack_noise', type = int, default= 8 / 255)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -192,7 +193,7 @@ def eval_batch(image, labels, evaluator, index):
 
     image = image.requires_grad_()
     predictions = evaluator(image)
-    attack_noise = 8/255
+    attack_noise = args.attack_noise
     
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
@@ -209,19 +210,21 @@ def eval_batch(image, labels, evaluator, index):
     
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
+        if args.attack:
+            image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.cuda(), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
         if args.attack:
-            image = attack(image, model_orig_LRP, attack_noise)
+            image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
         if args.attack:
-            image = attack(image, model_orig_LRP, attack_noise)
+            image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
@@ -233,20 +236,23 @@ def eval_batch(image, labels, evaluator, index):
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
+        m = 10
         if args.attack:
             image = attack(image, model, attack_noise)
+            m = 2
         # noise level like in the demo, to be changed later possibly
-        noise_level = 5 / 255
-        steps=1000
-        start=0.0001
-        end=0.02
-        opt_t = get_opt_t(noise_level, start, end, steps)
-        # for now i'll keep the order like in the demo
-        image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
-        image = image + torch.randn_like(image, ) * noise_level
-        image = torch.clamp(image, -1, 1)
-        # using transformer attribution because that's what they used in the demo
-        Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps=1000
+            start=0.0001
+            end=0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            # for now i'll keep the order like in the demo
+            image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
+            image = image + torch.randn_like(image, ) * noise_level
+            image = torch.clamp(image, -1, 1)
+            # using transformer attribution because that's what they used in the demo
+            Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
