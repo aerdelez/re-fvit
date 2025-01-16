@@ -20,7 +20,7 @@ Alternative approach: I added some sys.path shenanigans in the `imagenet_set_eva
 
 1. Change working directory to `FViT-main` with `cd FViT-main`.
 
-2. Crate a new Conda environment with `conda env create -f fixed_env.yml`. This may fail on WSL because `libmpich-dev` or `libopenmpi-dev` are missing; install them if a missing error message appears.
+2. Crate a new Conda environment with `conda env create -f fixed_env.yaml`. This may fail on WSL because `libmpich-dev` or `libopenmpi-dev` are missing; install them if a missing error message appears.
 
 3. Activate the environment with `conda activate fvit` and install `guided-diffusion` with `pip install guided-diffusion/`.
 
