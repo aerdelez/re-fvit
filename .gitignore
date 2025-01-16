@@ -1,7 +1,14 @@
 __pycache__/
+FViT-main/fig/
+
+# data
+*.mat
 
 # model checkpoints
 *.pt
 
 # used in wsl
 *:Zone.Identifier
+
+# output saving
+run/

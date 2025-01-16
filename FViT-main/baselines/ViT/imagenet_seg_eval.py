@@ -7,19 +7,29 @@ import argparse
 from PIL import Image
 import imageio
 import os
+import sys
+import inspect
 from tqdm import tqdm
 from utils.metrices import *
 
-from utils import render
-from utils.saver import Saver
-from utils.iou import IoU
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+parentdir = os.path.dirname(parentdir)
+sys.path.insert(0, parentdir) 
 
-from data.Imagenet import Imagenet_Segmentation
+from baselines.ViT.utils import render
+from baselines.ViT.utils.saver import Saver
+from baselines.ViT.utils.iou import IoU
 
-from ViT_explanation_generator import Baselines, LRP
-from ViT_new import vit_base_patch16_224
-from ViT_LRP import vit_base_patch16_224 as vit_LRP
-from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.data.imagenet import Imagenet_Segmentation
+
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP
+# changed these two imports to match demo
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
+from baselines.ViT.ViT_LRP import vit_base_patch16_224 
+
+from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.DDS import denoise, get_opt_t, attack, trans_to_224, trans_to_256
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -64,7 +74,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=[ 'rollout', 'lrp','transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                              'attn_last_layer', 'attn_gradcam'],
+                              'attn_last_layer', 'attn_gradcam', 'dds'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -92,6 +102,8 @@ parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
+parser.add_argument('--attack', action='store_true', default = False)
+parser.add_argument('--attack_noise', type = int, default= 8 / 255)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -134,13 +146,12 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
 
 # Model
-model = vit_base_patch16_224(pretrained=True).cuda()
+model = vit_for_cam(pretrained=True).cuda()
 baselines = Baselines(model)
 
 # LRP
-model_LRP = vit_LRP(pretrained=True).cuda()
-model_LRP.eval()
-lrp = LRP(model_LRP)
+model = vit_base_patch16_224(pretrained=True).cuda()
+lrp = LRP(model)
 
 # orig LRP
 model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
@@ -182,32 +193,66 @@ def eval_batch(image, labels, evaluator, index):
 
     image = image.requires_grad_()
     predictions = evaluator(image)
+    attack_noise = args.attack_noise
     
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
-        Res = baselines.generate_rollout(image.cuda(), start_layer=1).reshape(batch_size, 1, 14, 14)
+        if args.attack:
+            image = attack(image, model, attack_noise)
+
+        Res = lrp.generate_LRP(image.cuda(), method="rollout").reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
-        Res = orig_lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
+        if args.attack:
+            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
     
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+        if args.attack:
+            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
-        Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
+        if args.attack:
+            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
-        Res = orig_lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
+        if args.attack:
+            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
             .reshape(batch_size, 1, 14, 14)
     
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
+        if args.attack:
+            image = attack(image, model, attack_noise)
+        # could be different look demo
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
+
+    elif args.method == 'dds':
+        m = 10
+        if args.attack:
+            image = attack(image, model, attack_noise)
+            m = 2
+        # noise level like in the demo, to be changed later possibly
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps=1000
+            start=0.0001
+            end=0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            # for now i'll keep the order like in the demo
+            image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
+            image = image + torch.randn_like(image, ) * noise_level
+            image = torch.clamp(image, -1, 1)
+            # using transformer attribution because that's what they used in the demo
+            Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
@@ -215,7 +260,8 @@ def eval_batch(image, labels, evaluator, index):
     
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
-
+    
+    # i think this is necessary for segmentation eval, hence not in the demo
     ret = Res.mean()
 
     Res_1 = Res.gt(ret).type(Res.type())
@@ -266,8 +312,8 @@ def eval_batch(image, labels, evaluator, index):
     batch_label += labeled
     batch_inter += inter
     batch_union += union
-    # print("output", output.shape)
-    # print("ap labels", labels.shape)
+    #print("output", output.shape)
+    #print("ap labels", labels.shape)
     # ap = np.nan_to_num(get_ap_scores(output, labels))
     ap = np.nan_to_num(get_ap_scores(output_AP, labels))
     f1 = np.nan_to_num(get_f1_scores(output[0, 1].data.cpu(), labels[0]))
@@ -288,8 +334,8 @@ for batch_idx, (image, labels) in enumerate(iterator):
     else:
         images = image.cuda()
     labels = labels.cuda()
-    # print("image", image.shape)
-    # print("lables", labels.shape)
+    #print("image", image.shape)
+    #print("lables", labels.shape)
 
     correct, labeled, inter, union, ap, f1, pred, target = eval_batch(images, labels, model, batch_idx)
 
@@ -311,6 +357,7 @@ for batch_idx, (image, labels) in enumerate(iterator):
 
 predictions = np.concatenate(predictions)
 targets = np.concatenate(targets)
+
 pr, rc, thr = precision_recall_curve(targets, predictions)
 np.save(os.path.join(saver.experiment_dir, 'precision.npy'), pr)
 np.save(os.path.join(saver.experiment_dir, 'recall.npy'), rc)
