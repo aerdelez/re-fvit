@@ -10,7 +10,7 @@ import os
 import sys
 import inspect
 from tqdm import tqdm
-from baselines.ViT.utils.metrices import *
+from utils.metrices import *
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -40,30 +40,8 @@ plt.switch_backend('agg')
 
 
 # hyperparameters
-num_workers = 6
-batch_size = 64
-
-cls = ['airplane',
-       'bicycle',
-       'bird',
-       'boat',
-       'bottle',
-       'bus',
-       'car',
-       'cat',
-       'chair',
-       'cow',
-       'dining table',
-       'dog',
-       'horse',
-       'motobike',
-       'person',
-       'potted plant',
-       'sheep',
-       'sofa',
-       'train',
-       'tv'
-       ]
+num_workers = 0
+batch_size = 1
 
 # Args
 parser = argparse.ArgumentParser(description='Training multi-class classifier')
