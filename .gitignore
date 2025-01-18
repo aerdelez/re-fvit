@@ -3,6 +3,9 @@ FViT-main/fig/
 
 # data
 *.mat
+imagenet-val/
+*.tar
+*.bin
 
 # model checkpoints
 *.pt
