@@ -146,15 +146,15 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
 
 # Model
-model = vit_for_cam(pretrained=True).cuda()
+model = vit_for_cam(pretrained=True).to(device)
 baselines = Baselines(model)
 
 # LRP
-model = vit_base_patch16_224(pretrained=True).cuda()
+model = vit_base_patch16_224(pretrained=True).to(device)
 lrp = LRP(model)
 
 # orig LRP
-model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
+model_orig_LRP = vit_orig_LRP(pretrained=True).to(device)
 model_orig_LRP.eval()
 orig_lrp = LRP(model_orig_LRP)
 
@@ -173,7 +173,7 @@ def compute_pred(output):
     T = np.expand_dims(T, 0)
     T = (T[:, np.newaxis] == np.arange(1000)) * 1.0
     T = torch.from_numpy(T).type(torch.FloatTensor)
-    Tt = T.cuda()
+    Tt = T.to(device)
 
     return Tt
 
@@ -202,30 +202,30 @@ def eval_batch(image, labels, evaluator, index):
 
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
-        Res = lrp.generate_LRP(image.cuda(), method="rollout").reshape(batch_size, 1, 14, 14)
+        Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
-        Res = lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
+        Res = lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
 
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        Res = lrp.generate_LRP(image.cuda(), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+        Res = lrp.generate_LRP(image.to(device), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
-        Res = lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation) \
+        Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
-        Res = lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation) \
+        Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
         # could be different look demo
-        Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
+        Res = baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
         # noise level like in the demo, to be changed later possibly
@@ -240,13 +240,13 @@ def eval_batch(image, labels, evaluator, index):
             image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
             image_dds = torch.clamp(image_dds, -1, 1)
             # using transformer attribution because that's what they used in the demo
-            Res = lrp.generate_LRP(image_dds.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
-        Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
+        Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
 
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
@@ -320,10 +320,10 @@ predictions, targets = [], []
 for batch_idx, (image, labels) in enumerate(iterator):
 
     if args.method == "blur":
-        images = (image[0].cuda(), image[1].cuda())
+        images = (image[0].to(device), image[1].to(device))
     else:
-        images = image.cuda()
-    labels = labels.cuda()
+        images = image.to(device)
+    labels = labels.to(device)
     #print("image", image.shape)
     #print("lables", labels.shape)
 
