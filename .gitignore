@@ -2,8 +2,10 @@ __pycache__/
 FViT-main/fig/
 
 # data
+visualizations/
+val/
 *.mat
-imagenet-val/
+*.tar.gz
 *.tar
 *.bin
 

@@ -205,7 +205,8 @@ if __name__ == "__main__":
         transforms.ToTensor(),
     ])
 
-    imagenet_ds = ImageNet(args.imagenet_validation_path, split='val', download=False, transform=transform)
+    # download=False,
+    imagenet_ds = ImageNet(args.imagenet_validation_path, split='val', transform=transform)
     sample_loader = torch.utils.data.DataLoader(
         imagenet_ds,
         batch_size=args.batch_size,
