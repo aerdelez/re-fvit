@@ -34,7 +34,8 @@
 
 
 ## Running Image Pertubation
+1. Download ImageNet DevKit(?) from https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz.
 
-1. Download ImageNet Validation Set from https://www.kaggle.com/datasets/titericz/imagenet1k-val and compress into `ILSVRC2012_img_val.tar`. 
+2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5.
 
-2. Run `python FViT-main/baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to/ILSVRC2012_img_val.tar`.
+3. Run `python FViT-main/baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/`.

@@ -2,6 +2,7 @@ __pycache__/
 FViT-main/fig/
 
 # data
+experiments/
 visualizations/
 val/
 *.mat
