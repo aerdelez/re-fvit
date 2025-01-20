@@ -41,7 +41,7 @@ plt.switch_backend('agg')
 
 # hyperparameters
 num_workers = 0
-batch_size = 1
+batch_size = 16
 
 cls = ['airplane',
        'bicycle',
@@ -103,7 +103,7 @@ parser.add_argument('--is-ablation', type=bool,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default = False)
-parser.add_argument('--attack_noise', type = int, default= 8 / 255)
+parser.add_argument('--attack_noise', type = float, default= 8 / 255)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -143,7 +143,7 @@ test_lbl_trans = transforms.Compose([
 
 ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
-dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
+dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 # Model
 model = vit_for_cam(pretrained=True).cuda()
