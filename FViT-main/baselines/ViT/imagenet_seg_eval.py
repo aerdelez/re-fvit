@@ -81,7 +81,7 @@ parser.add_argument('--is-ablation', type=bool,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default = False)
-parser.add_argument('--attack_noise', type = int, default= 8 / 255)
+parser.add_argument('--attack_noise', type=float, default= 8 / 255)
 parser.add_argument('--seed', type=int, default=44)
 args = parser.parse_args()
 
