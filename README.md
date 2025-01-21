@@ -34,7 +34,7 @@
 
 
 ## Running Image Pertubation
-1. Download ImageNet DevKit(?) from https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz.
+1. Download ImageNet DevKit(?) with `wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz`.
 
 2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5.
 

@@ -20,6 +20,8 @@ from ViT_new import vit_base_patch16_224
 from ViT_LRP import vit_base_patch16_224 as vit_LRP
 from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
+from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
+
 from torchvision.datasets import ImageNet
 
 
@@ -103,6 +105,23 @@ def compute_saliency_and_save(args):
             elif args.method == 'attn_gradcam':
                 Res = baselines.generate_cam_attn(data, index=index).reshape(data.shape[0], 1, 14, 14)
 
+            elif args.method == 'dds':
+                # TODO noise level like in the demo, to be changed later possibly
+                m = 10
+                image = data
+                for _ in range(m):
+                    noise_level = 8 / 255
+                    steps=1000
+                    start=0.0001
+                    end=0.02
+                    opt_t = get_opt_t(noise_level, start, end, steps)
+                    # for now i'll keep the order like in the demo
+                    image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
+                    image = image + torch.randn_like(image, ) * noise_level
+                    image = torch.clamp(image, -1, 1)
+                    # using transformer attribution because that's what they used in the demo
+                Res = lrp.generate_LRP(data, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
+
             if args.method != 'full_lrp' and args.method != 'input_grads':
                 Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
             Res = (Res - Res.min()) / (Res.max() - Res.min())
@@ -118,7 +137,8 @@ if __name__ == "__main__":
     parser.add_argument('--method', type=str,
                         default='grad_rollout',
                         choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                                 'attn_last_layer', 'attn_gradcam'],
+                                 'attn_last_layer', 'attn_gradcam',
+                                 'dds'],
                         help='')
     parser.add_argument('--lmd', type=float,
                         default=10,
