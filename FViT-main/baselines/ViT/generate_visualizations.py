@@ -106,22 +106,22 @@ def compute_saliency_and_save(args):
                 Res = baselines.generate_cam_attn(data, index=index).reshape(data.shape[0], 1, 14, 14)
 
             elif args.method == 'dds':
-                # TODO noise level like in the demo, to be changed later possibly
+                # TODO hyperparams, possibly changed later
                 m = 10
+                res_list = []
                 image = data
                 for _ in range(m):
                     noise_level = 8 / 255
-                    steps=1000
-                    start=0.0001
-                    end=0.02
+                    steps = 1000
+                    start = 0.0001
+                    end = 0.02
                     opt_t = get_opt_t(noise_level, start, end, steps)
-                    # for now i'll keep the order like in the demo
-                    image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
-                    image = image + torch.randn_like(image, ) * noise_level
-                    image = torch.clamp(image, -1, 1)
-                    # using transformer attribution because that's what they used in the demo
-                Res = lrp.generate_LRP(data, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
-
+                    image_noisy = image + torch.randn_like(image, ) * noise_level
+                    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+                    image_dds = torch.clamp(image_dds, -1, 1)
+                    Res = lrp.generate_LRP(data, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
+                    res_list.append(Res)
+                Res = torch.stack(res_list).mean(0)
             if args.method != 'full_lrp' and args.method != 'input_grads':
                 Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
             Res = (Res - Res.min()) / (Res.max() - Res.min())

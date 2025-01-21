@@ -162,7 +162,7 @@ if __name__ == "__main__":
                         choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'v_gradcam', 'lrp_last_layer',
                                  'lrp_second_layer', 'gradcam',
                                  'attn_last_layer', 'attn_gradcam', 'input_grads',
-                                 'dds'],
+                                 'dds'], #  TODO implement dds
                         help='')
     parser.add_argument('--vis-class', type=str,
                         default='top',
