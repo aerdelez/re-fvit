@@ -17,7 +17,7 @@ parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir) 
 
-from baselines.ViT.utils import render
+from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
 from baselines.ViT.utils.iou import IoU
 
@@ -42,28 +42,6 @@ plt.switch_backend('agg')
 # hyperparameters
 num_workers = 0
 batch_size = 1
-
-cls = ['airplane',
-       'bicycle',
-       'bird',
-       'boat',
-       'bottle',
-       'bus',
-       'car',
-       'cat',
-       'chair',
-       'cow',
-       'dining table',
-       'dog',
-       'horse',
-       'motobike',
-       'person',
-       'potted plant',
-       'sheep',
-       'sofa',
-       'train',
-       'tv'
-       ]
 
 # Args
 parser = argparse.ArgumentParser(description='Training multi-class classifier')
@@ -103,7 +81,8 @@ parser.add_argument('--is-ablation', type=bool,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default = False)
-parser.add_argument('--attack_noise', type = int, default= 8 / 255)
+parser.add_argument('--attack_noise', type=float, default= 8 / 255)
+parser.add_argument('--seed', type=int, default=44)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -112,6 +91,8 @@ alpha = 2
 
 cuda = torch.cuda.is_available()
 device = torch.device("cuda" if cuda else "cpu")
+
+seeder.seed_everything(args.seed)
 
 # Define Saver
 saver = Saver(args)
@@ -143,18 +124,18 @@ test_lbl_trans = transforms.Compose([
 
 ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
-dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
+dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
 # Model
-model = vit_for_cam(pretrained=True).cuda()
+model = vit_for_cam(pretrained=True).to(device)
 baselines = Baselines(model)
 
 # LRP
-model = vit_base_patch16_224(pretrained=True).cuda()
+model = vit_base_patch16_224(pretrained=True).to(device)
 lrp = LRP(model)
 
 # orig LRP
-model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
+model_orig_LRP = vit_orig_LRP(pretrained=True).to(device)
 model_orig_LRP.eval()
 orig_lrp = LRP(model_orig_LRP)
 
@@ -173,7 +154,7 @@ def compute_pred(output):
     T = np.expand_dims(T, 0)
     T = (T[:, np.newaxis] == np.arange(1000)) * 1.0
     T = torch.from_numpy(T).type(torch.FloatTensor)
-    Tt = T.cuda()
+    Tt = T.to(device)
 
     return Tt
 
@@ -194,73 +175,63 @@ def eval_batch(image, labels, evaluator, index):
     image = image.requires_grad_()
     predictions = evaluator(image)
     attack_noise = args.attack_noise
-    
+
+    m = 10
+    if args.attack:
+        image = attack(image, model, attack_noise)
+        m = 2
+
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
-        if args.attack:
-            image = attack(image, model, attack_noise)
+        Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
-        Res = lrp.generate_LRP(image.cuda(), method="rollout").reshape(batch_size, 1, 14, 14)
-    
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
-    
+        Res = lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
+
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.cuda(), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
-    
+        Res = lrp.generate_LRP(image.to(device), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation)\
+        Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation)\
+        Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
-        if args.attack:
-            image = attack(image, model, attack_noise)
         # could be different look demo
-        Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
+        Res = baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
         # noise level like in the demo, to be changed later possibly
+        res_list = []
         for _ in range(m):
             noise_level = 8 / 255
-            steps=1000
-            start=0.0001
-            end=0.02
+            steps = 1000
+            start = 0.0001
+            end = 0.02
             opt_t = get_opt_t(noise_level, start, end, steps)
-            # for now i'll keep the order like in the demo
-            image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
-            image = image + torch.randn_like(image, ) * noise_level
-            image = torch.clamp(image, -1, 1)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
             # using transformer attribution because that's what they used in the demo
-            Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
-        Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
-    
+        Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
+
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
-    
+
     # i think this is necessary for segmentation eval, hence not in the demo
     ret = Res.mean()
 
@@ -330,10 +301,10 @@ predictions, targets = [], []
 for batch_idx, (image, labels) in enumerate(iterator):
 
     if args.method == "blur":
-        images = (image[0].cuda(), image[1].cuda())
+        images = (image[0].to(device), image[1].to(device))
     else:
-        images = image.cuda()
-    labels = labels.cuda()
+        images = image.to(device)
+    labels = labels.to(device)
     #print("image", image.shape)
     #print("lables", labels.shape)
 

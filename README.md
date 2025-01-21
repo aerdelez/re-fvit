@@ -19,7 +19,7 @@
 
 1. Change working directory to `FViT-main` with `cd FViT-main`.
 
-2. Crate a new Conda environment with `conda env create -f fixed_env.yml`. This may fail on WSL because `libmpich-dev` or `libopenmpi-dev` are missing; install them if a missing error message appears.
+2. Crate a new Conda environment with `conda env create -f fixed_env.yaml`. This may fail on WSL because `libmpich-dev` or `libopenmpi-dev` are missing; install them if a missing error message appears.
 
 3. Activate the environment with `conda activate fvit` and install `guided-diffusion` with `pip install guided-diffusion/`.
 
@@ -39,3 +39,4 @@
 2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5.
 
 3. Run `python FViT-main/baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/`.
+
