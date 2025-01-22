@@ -2,21 +2,20 @@
 
 ## Issues
 
-1. `ViT_LRP.py` and other files import modules with prefix `baselines.ViT.` except it's located in that module. This is correct for running the notebook from the 'root' directory, but not for `imagenet_seg_eval.py` which has the same location as `ViT_LRP.py` and other files. I removed the prefix in this branch since I am trying to run `imagenet_seg_eval.py`. 
+1. Classification accuracy
+2. Slow runtime
 
-Alternative approach: I added some sys.path shenanigans in the `imagenet_set_eval.py` such that we can keep the prefixes and also execute the sctipt :).
-
-2. No code to test classification/segmentation accuracy?
 
 ## Fixes
 
 1. Removed package versions from env.yaml file.
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
-3. Added `modules/`, `utils/` and `/data` modules from https://github.com/hila-chefer/Transformer-Explainability.
+3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
 4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies
+5. Found a cool fix using 'sys.path shenanigans' to run the baselines and notebook without issues. (Iza)
+6. 
 
-
-## Setup
+## Setup (for Demo)
 
 1. Change working directory to `FViT-main` with `cd FViT-main`.
 
@@ -26,8 +25,18 @@ Alternative approach: I added some sys.path shenanigans in the `imagenet_set_eva
 
 4. Copy the `256x256_diffusion_uncond.pt` model checkpoint from https://github.com/openai/guided-diffusion to the `guided-diffusion/models` directory.
 
-5. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
 
-## Running the Experiments
+## Running Image Segmentation
 
-Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method='dds'`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `method='dds` makes the script utilise Denoised Diffusion Smoothing.  
+1. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
+
+2. Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method='dds'`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `method='dds` makes the script utilise Denoised Diffusion Smoothing.  
+
+
+## Running Image Pertubation
+1. Download ImageNet DevKit(?) with `wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz`.
+
+2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5.
+
+3. Run `python FViT-main/baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/`.
+

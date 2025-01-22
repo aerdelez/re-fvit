@@ -4,6 +4,14 @@ import h5py
 
 import argparse
 
+import os
+import sys
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+parentdir = os.path.dirname(parentdir)
+sys.path.insert(0, parentdir) 
+
 # Import saliency methods and models
 from misc_functions import *
 
@@ -11,6 +19,8 @@ from ViT_explanation_generator import Baselines, LRP
 from ViT_new import vit_base_patch16_224
 from ViT_LRP import vit_base_patch16_224 as vit_LRP
 from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+
+from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
 
 from torchvision.datasets import ImageNet
 
@@ -95,6 +105,23 @@ def compute_saliency_and_save(args):
             elif args.method == 'attn_gradcam':
                 Res = baselines.generate_cam_attn(data, index=index).reshape(data.shape[0], 1, 14, 14)
 
+            elif args.method == 'dds':
+                # TODO hyperparams, possibly changed later
+                m = 10
+                res_list = []
+                image = data
+                for _ in range(m):
+                    noise_level = 8 / 255
+                    steps = 1000
+                    start = 0.0001
+                    end = 0.02
+                    opt_t = get_opt_t(noise_level, start, end, steps)
+                    image_noisy = image + torch.randn_like(image, ) * noise_level
+                    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+                    image_dds = torch.clamp(image_dds, -1, 1)
+                    Res = lrp.generate_LRP(data, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
+                    res_list.append(Res)
+                Res = torch.stack(res_list).mean(0)
             if args.method != 'full_lrp' and args.method != 'input_grads':
                 Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
             Res = (Res - Res.min()) / (Res.max() - Res.min())
@@ -110,7 +137,8 @@ if __name__ == "__main__":
     parser.add_argument('--method', type=str,
                         default='grad_rollout',
                         choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                                 'attn_last_layer', 'attn_gradcam'],
+                                 'attn_last_layer', 'attn_gradcam',
+                                 'dds'],
                         help='')
     parser.add_argument('--lmd', type=float,
                         default=10,
@@ -197,7 +225,8 @@ if __name__ == "__main__":
         transforms.ToTensor(),
     ])
 
-    imagenet_ds = ImageNet(args.imagenet_validation_path, split='val', download=False, transform=transform)
+    # download=False,
+    imagenet_ds = ImageNet(args.imagenet_validation_path, split='val', transform=transform)
     sample_loader = torch.utils.data.DataLoader(
         imagenet_ds,
         batch_size=args.batch_size,

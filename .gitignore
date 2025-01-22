@@ -2,7 +2,13 @@ __pycache__/
 FViT-main/fig/
 
 # data
+experiments/
+visualizations/
+val/
 *.mat
+*.tar.gz
+*.tar
+*.bin
 
 # model checkpoints
 *.pt
