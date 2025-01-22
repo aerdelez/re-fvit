@@ -16,8 +16,14 @@ sys.path.insert(0, parentdir)
 from misc_functions import *
 
 from ViT_explanation_generator import Baselines, LRP
-from ViT_new import vit_base_patch16_224
-from ViT_LRP import vit_base_patch16_224 as vit_LRP
+
+# from ViT_new import vit_base_patch16_224
+# from ViT_LRP import vit_base_patch16_224 as vit_LRP
+
+# changed these two imports to match demo
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
+from baselines.ViT.ViT_LRP import vit_base_patch16_224 
+
 from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
 from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
@@ -78,29 +84,30 @@ def compute_saliency_and_save(args):
                 index = target
 
             if args.method == 'rollout':
-                Res = baselines.generate_rollout(data, start_layer=1).reshape(data.shape[0], 1, 14, 14)
-                # Res = Res - Res.mean()
+                # Res = baselines.generate_rollout(data, start_layer=1).reshape(data.shape[0], 1, 14, 14)
+                Res = lrp.generate_LRP(data, method="rollout").reshape(data.shape[0], 1, 14, 14)
 
             elif args.method == 'lrp':
                 Res = lrp.generate_LRP(data, start_layer=1, index=index).reshape(data.shape[0], 1, 14, 14)
-                # Res = Res - Res.mean()
+                # no change?
 
             elif args.method == 'transformer_attribution':
-                Res = lrp.generate_LRP(data, start_layer=1, method="grad", index=index).reshape(data.shape[0], 1, 14, 14)
-                # Res = Res - Res.mean()
+                # Res = lrp.generate_LRP(data, start_layer=1, method="grad", index=index).reshape(data.shape[0], 1, 14, 14)
+                Res = lrp.generate_LRP(data, method="transformer_attribution").reshape(data.shape[0], 1, 14, 14)
 
             elif args.method == 'full_lrp':
-                Res = orig_lrp.generate_LRP(data, method="full", index=index).reshape(data.shape[0], 1, 224, 224)
-                # Res = Res - Res.mean()
+                # Res = orig_lrp.generate_LRP(data, method="full", index=index).reshape(data.shape[0], 1, 224, 224)
+                Res = lrp.generate_LRP(data, method="full").reshape(data.shape[0], 1, 224, 224)
 
             elif args.method == 'lrp_last_layer':
-                Res = orig_lrp.generate_LRP(data, method="last_layer", is_ablation=args.is_ablation, index=index) \
-                    .reshape(data.shape[0], 1, 14, 14)
-                # Res = Res - Res.mean()
+                # Res = orig_lrp.generate_LRP(data, method="last_layer", is_ablation=args.is_ablation, index=index) \
+                #     .reshape(data.shape[0], 1, 14, 14)
+                Res = lrp.generate_LRP(data, method="last_layer", is_ablation=args.is_ablation).reshape(data.shape[0], 1, 14, 14)
 
             elif args.method == 'attn_last_layer':
-                Res = lrp.generate_LRP(data, method="last_layer_attn", is_ablation=args.is_ablation) \
-                    .reshape(data.shape[0], 1, 14, 14)
+                # Res = lrp.generate_LRP(data, method="last_layer_attn", is_ablation=args.is_ablation) \
+                #     .reshape(data.shape[0], 1, 14, 14)
+                 Res = lrp.generate_LRP(data, method="last_layer_attn", is_ablation=args.is_ablation).reshape(data.shape[0], 1, 14, 14)
 
             elif args.method == 'attn_gradcam':
                 Res = baselines.generate_cam_attn(data, index=index).reshape(data.shape[0], 1, 14, 14)
@@ -122,8 +129,10 @@ def compute_saliency_and_save(args):
                     Res = lrp.generate_LRP(image_dds, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
                     res_list.append(Res)
                 Res = torch.stack(res_list).mean(0)
+
             if args.method != 'full_lrp' and args.method != 'input_grads':
                 Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
+            
             Res = (Res - Res.min()) / (Res.max() - Res.min())
 
             data_cam[-data.shape[0]:] = Res.data.cpu().numpy()
@@ -206,13 +215,17 @@ if __name__ == "__main__":
     device = torch.device("cuda" if cuda else "cpu")
 
     # Model
-    model = vit_base_patch16_224(pretrained=True).cuda()
+    # model = vit_base_patch16_224(pretrained=True).cuda()
+    # baselines = Baselines(model)
+    model = vit_for_cam(pretrained=True).cuda()
     baselines = Baselines(model)
 
     # LRP
-    model_LRP = vit_LRP(pretrained=True).cuda()
-    model_LRP.eval()
-    lrp = LRP(model_LRP)
+    # model_LRP = vit_LRP(pretrained=True).cuda()
+    # model_LRP.eval()
+    # lrp = LRP(model_LRP)
+    model = vit_base_patch16_224(pretrained=True).cuda()
+    lrp = LRP(model)
 
     # orig LRP
     model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
