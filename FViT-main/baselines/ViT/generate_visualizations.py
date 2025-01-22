@@ -119,7 +119,7 @@ def compute_saliency_and_save(args):
                     image_noisy = image + torch.randn_like(image, ) * noise_level
                     image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
                     image_dds = torch.clamp(image_dds, -1, 1)
-                    Res = lrp.generate_LRP(data, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
+                    Res = lrp.generate_LRP(image_dds, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
                     res_list.append(Res)
                 Res = torch.stack(res_list).mean(0)
             if args.method != 'full_lrp' and args.method != 'input_grads':
