@@ -17,7 +17,7 @@ parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir) 
 
-from baselines.ViT.utils import render
+from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
 from baselines.ViT.utils.iou import IoU
 
@@ -105,6 +105,7 @@ parser.add_argument('--is-ablation', type=bool,
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default = False)
 parser.add_argument('--attack_noise', type = float, default= 8 / 255)
+parser.add_argument('--seed', type=int, default=44)
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -113,6 +114,8 @@ alpha = 2
 
 cuda = torch.cuda.is_available()
 device = torch.device("cuda" if cuda else "cpu")
+
+seeder.seed_everything(args.seed)
 
 # Define Saver
 saver = Saver(args)
@@ -144,7 +147,7 @@ test_lbl_trans = transforms.Compose([
 
 ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
-dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
+dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
 # Model
 model = vit_for_cam(pretrained=True).cuda()
