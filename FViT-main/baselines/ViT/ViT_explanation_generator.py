@@ -83,3 +83,41 @@ class Baselines:
             all_layer_attentions.append(avg_heads)
         rollout = compute_rollout_attention(all_layer_attentions, start_layer=start_layer)
         return rollout[:,0, 1:]
+
+class IG:
+    def __init__(self, model):
+        self.model = model
+        self.model.eval()
+
+    def generate_ig(self, input):
+        output = self.model(input.cuda(), register_hook=True, retain_graph=True)
+        blocks = self.model.blocks
+        all_layer_attentions = []
+        index = np.argmax(output.cpu().data.numpy(), axis=-1)
+        heads = 12
+        m = 20
+        steps = 20
+        scale = 1.0 / m
+        prob = self.model.get_ig()
+        k=0
+        discard_ratio = 0.9
+        for blk in blocks:
+            attn_heads = blk.attn.get_attention_map()
+            F = prob[k]
+            k = k + 1
+            all_ig = []
+            for i in range(heads):
+                attn = attn_heads[0][i]
+                gradient = torch.autograd.grad(torch.unbind(F[:, index]), attn_heads, retain_graph=True)
+                gradient = gradient[0][0][i]
+                baseline = torch.zeros_like(gradient)
+                for alpha in np.linspace(0,1,steps):
+                    gradient_a = gradient * alpha
+                    baseline += gradient_a
+                attn = attn * baseline * scale
+                all_ig.append(attn)
+            a_ig = torch.stack(all_ig,dim=0)
+            a_ig = a_ig.unsqueeze(dim=0)
+            ig = torch.max(a_ig,dim=1)[0]
+            all_layer_attentions.append(ig)
+        return all_layer_attentions            

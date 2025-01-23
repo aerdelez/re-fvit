@@ -23,12 +23,13 @@ from baselines.ViT.utils.iou import IoU
 
 from baselines.ViT.data.imagenet import Imagenet_Segmentation
 
-from baselines.ViT.ViT_explanation_generator import Baselines, LRP
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 # changed these two imports to match demo
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
 from baselines.ViT.ViT_LRP import vit_base_patch16_224 
-
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
 from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+
 from baselines.ViT.DDS import denoise, get_opt_t, attack, trans_to_224, trans_to_256
 
 from sklearn.metrics import precision_recall_curve
@@ -41,7 +42,7 @@ plt.switch_backend('agg')
 
 # hyperparameters
 num_workers = 0
-batch_size = 16
+batch_size = 1
 
 cls = ['airplane',
        'bicycle',
@@ -74,7 +75,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=[ 'rollout', 'lrp','transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                              'attn_last_layer', 'attn_gradcam', 'dds'],
+                              'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -149,6 +150,11 @@ dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=4, drop_la
 model = vit_for_cam(pretrained=True).cuda()
 baselines = Baselines(model)
 
+# attribution rollout
+model_attr_rollout = vit_attr_rollout(pretrained=True).cuda()
+model_attr_rollout.eval()
+ig = IG(model_attr_rollout)
+
 # LRP
 model = vit_base_patch16_224(pretrained=True).cuda()
 lrp = LRP(model)
@@ -163,6 +169,19 @@ metric = IoU(2, ignore_index=-1)
 iterator = tqdm(dl)
 
 model.eval()
+
+def compute_rollout_attention(all_layer_matrices, start_layer=0):
+    # adding residual consideration- code adapted from https://github.com/samiraabnar/attention_flow
+    num_tokens = all_layer_matrices[0].shape[1]
+    batch_size = all_layer_matrices[0].shape[0]
+    eye = torch.eye(num_tokens).expand(batch_size, num_tokens, num_tokens).to(all_layer_matrices[0].device)
+    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
+    matrices_aug = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
+                          for i in range(len(all_layer_matrices))]
+    joint_attention = matrices_aug[start_layer]
+    for i in range(start_layer+1, len(matrices_aug)):
+        joint_attention = matrices_aug[i].bmm(joint_attention)
+    return joint_attention
 
 
 def compute_pred(output):
@@ -253,6 +272,14 @@ def eval_batch(image, labels, evaluator, index):
             image = torch.clamp(image, -1, 1)
             # using transformer attribution because that's what they used in the demo
             Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+
+    elif args.method == 'attr_rollout':
+        if args.attack:
+            image = attack(image, model_attr_rollout, attack_noise)
+        Res = ig.generate_ig(image.cuda())
+        Res = compute_rollout_attention(Res)
+        Res = Res[:,0, 1:]
+        Res = Res.reshape(batch_size, 1, 14, 14)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
