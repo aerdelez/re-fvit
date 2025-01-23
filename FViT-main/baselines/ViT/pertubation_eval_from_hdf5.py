@@ -5,6 +5,14 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 
+import os
+import sys
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+parentdir = os.path.dirname(parentdir)
+sys.path.insert(0, parentdir) 
+
 # Import saliency methods and models
 from ViT_explanation_generator import Baselines
 from ViT_new import vit_base_patch16_224
@@ -153,7 +161,8 @@ if __name__ == "__main__":
                         default='grad_rollout',
                         choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'v_gradcam', 'lrp_last_layer',
                                  'lrp_second_layer', 'gradcam',
-                                 'attn_last_layer', 'attn_gradcam', 'input_grads'],
+                                 'attn_last_layer', 'attn_gradcam', 'input_grads',
+                                 'dds'], #  TODO implement dds
                         help='')
     parser.add_argument('--vis-class', type=str,
                         default='top',
