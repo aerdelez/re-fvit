@@ -11,7 +11,7 @@
 
 ## Setting up the Environment
 
-1. Change working directory to `FViT-main` with `cd FViT-main`. This is important for correct imports of modules.
+1. Change working directory to `FViT-main` with `cd FViT-main`. This is important for correct imports of modules when running the scripts with a shell.
 
 2. Crate a new Conda environment with `conda env create -f fixed_env.yaml`. This may fail on WSL because `libmpich-dev` or `libopenmpi-dev` are missing; install them if a missing error message appears.
 
@@ -22,7 +22,7 @@
 
 ## Running the Qualitative Demo
 
-2. Open `fvit-demo.ipynb` and run the notebok with the `fvit` environment.
+1. Open `fvit-demo.ipynb` and run the notebok with the `fvit` environment.
 
 
 ## Running Image Segmentation
