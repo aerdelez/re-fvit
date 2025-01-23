@@ -35,7 +35,7 @@
 ## Running Image Perturbation
 1. Download ImageNet DevKit(?) with `wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz`.
 
-2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5 and place it in the same directory as the ImageNet Devkit.
+2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5 and place it in the same directory as the ImageNet Devkit; a torrent utility is necessary for this source.
 
 3. Go to `FViT-main` and run `python baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/ --method chosen-method`. This creates the visualizations needed for the perturbation task. The `--imagenet-validation-path` argument needs to specify a path to the two (compressed) ImageNet files.
 
