@@ -25,14 +25,14 @@
 - Open `fvit-demo.ipynb` and run the notebok with the `fvit` environment.
 
 
-## Running Image Segmentation
+## Running the Image Segmentation Task
 
 1. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
 
 2. Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method='dds'`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `method='dds` makes the script utilise Denoised Diffusion Smoothing.
 
 
-## Running Image Perturbation
+## Running the Image Perturbation Task
 1. Download ImageNet DevKit(?) with `wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz`.
 
 2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5 and place it in the same directory as the ImageNet Devkit; a torrent utility is necessary for this source.
