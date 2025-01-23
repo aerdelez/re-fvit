@@ -75,7 +75,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=[ 'rollout', 'lrp','transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                              'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout'],
+                              'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -213,6 +213,11 @@ def eval_batch(image, labels, evaluator, index):
     image = image.requires_grad_()
     predictions = evaluator(image)
     attack_noise = args.attack_noise
+
+    m = 10
+    if args.attack:
+        image = attack(image, model, attack_noise)
+        m = 2
     
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
@@ -255,23 +260,23 @@ def eval_batch(image, labels, evaluator, index):
         Res = baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'dds':
-        m = 10
+        # noise level like in the demo, to be changed later possibly
         if args.attack:
             image = attack(image, model, attack_noise)
-            m = 2
-        # noise level like in the demo, to be changed later possibly
+        res_list = []
         for _ in range(m):
             noise_level = 8 / 255
-            steps=1000
-            start=0.0001
-            end=0.02
+            steps = 1000
+            start = 0.0001
+            end = 0.02
             opt_t = get_opt_t(noise_level, start, end, steps)
-            # for now i'll keep the order like in the demo
-            image = trans_to_224(denoise(trans_to_256(image), opt_t, steps, start, end, noise_level))
-            image = image + torch.randn_like(image, ) * noise_level
-            image = torch.clamp(image, -1, 1)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
             # using transformer attribution because that's what they used in the demo
-            Res = lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
 
     elif args.method == 'attr_rollout':
         if args.attack:
@@ -280,6 +285,29 @@ def eval_batch(image, labels, evaluator, index):
         Res = compute_rollout_attention(Res)
         Res = Res[:,0, 1:]
         Res = Res.reshape(batch_size, 1, 14, 14)
+
+    elif args.method == 'attr_rollout_dds':
+        
+        res_list = []
+
+        if args.attack:
+            image = attack(image, model_attr_rollout, attack_noise)
+
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps = 1000
+            start = 0.0001
+            end = 0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
+            Res = ig.generate_ig(image.cuda())
+            Res = compute_rollout_attention(Res)
+            Res = Res[:,0, 1:]
+            Res = Res.reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
