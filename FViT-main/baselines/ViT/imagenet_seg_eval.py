@@ -15,7 +15,7 @@ from utils.metrices import *
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
-sys.path.insert(0, parentdir) 
+sys.path.insert(0, parentdir)
 
 from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
@@ -26,7 +26,7 @@ from baselines.ViT.data.imagenet import Imagenet_Segmentation
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 # changed these two imports to match demo
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
-from baselines.ViT.ViT_LRP import vit_base_patch16_224 
+from baselines.ViT.ViT_LRP import vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
 from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
@@ -38,7 +38,6 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
 plt.switch_backend('agg')
-
 
 # hyperparameters
 num_workers = 0
@@ -74,8 +73,8 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
                     help='Testing Dataset')
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
-                    choices=[ 'rollout', 'lrp','transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                              'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'],
+                    choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
+                             'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -103,8 +102,8 @@ parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
-parser.add_argument('--attack', action='store_true', default = False)
-parser.add_argument('--attack_noise', type=float, default= 8 / 255)
+parser.add_argument('--attack', action='store_true', default=False)
+parser.add_argument('--attack_noise', type=float, default=8 / 255)
 parser.add_argument('--seed', type=int, default=44)
 args = parser.parse_args()
 
@@ -173,6 +172,7 @@ iterator = tqdm(dl)
 
 model.eval()
 
+
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     # adding residual consideration- code adapted from https://github.com/samiraabnar/attention_flow
     num_tokens = all_layer_matrices[0].shape[1]
@@ -180,9 +180,9 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
     eye = torch.eye(num_tokens).expand(batch_size, num_tokens, num_tokens).to(all_layer_matrices[0].device)
     all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
     matrices_aug = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
-                          for i in range(len(all_layer_matrices))]
+                    for i in range(len(all_layer_matrices))]
     joint_attention = matrices_aug[start_layer]
-    for i in range(start_layer+1, len(matrices_aug)):
+    for i in range(start_layer + 1, len(matrices_aug)):
         joint_attention = matrices_aug[i].bmm(joint_attention)
     return joint_attention
 
@@ -217,39 +217,38 @@ def eval_batch(image, labels, evaluator, index):
     predictions = evaluator(image)
     attack_noise = args.attack_noise
 
-
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
         if args.attack:
             image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
         if args.attack:
             image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
-    
+
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
         if args.attack:
             image = attack(image, model, attack_noise)
         Res = lrp.generate_LRP(image.to(device), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
         if args.attack:
             image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)\
+        Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
         if args.attack:
             image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)\
+        Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation) \
             .reshape(batch_size, 1, 14, 14)
-    
+
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
         if args.attack:
@@ -272,7 +271,8 @@ def eval_batch(image, labels, evaluator, index):
             image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
             image_dds = torch.clamp(image_dds, -1, 1)
             # using transformer attribution because that's what they used in the demo
-            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(
+                batch_size, 1, 14, 14)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
 
@@ -281,7 +281,7 @@ def eval_batch(image, labels, evaluator, index):
             image = attack(image, model_attr_rollout, attack_noise)
         Res = ig.generate_ig(image.cuda())
         Res = compute_rollout_attention(Res)
-        Res = Res[:,0, 1:]
+        Res = Res[:, 0, 1:]
         Res = Res.reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'attr_rollout_dds':
@@ -302,7 +302,7 @@ def eval_batch(image, labels, evaluator, index):
             image_dds = torch.clamp(image_dds, -1, 1)
             Res = ig.generate_ig(image.cuda())
             Res = compute_rollout_attention(Res)
-            Res = Res[:,0, 1:]
+            Res = Res[:, 0, 1:]
             Res = Res.reshape(batch_size, 1, 14, 14)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
@@ -313,7 +313,7 @@ def eval_batch(image, labels, evaluator, index):
 
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
-    
+
     # i think this is necessary for segmentation eval, hence not in the demo
     ret = Res.mean()
 
@@ -321,13 +321,12 @@ def eval_batch(image, labels, evaluator, index):
     Res_0 = Res.le(ret).type(Res.type())
 
     Res_1_AP = Res
-    Res_0_AP = 1-Res
+    Res_0_AP = 1 - Res
 
     Res_1[Res_1 != Res_1] = 0
     Res_0[Res_0 != Res_0] = 0
     Res_1_AP[Res_1_AP != Res_1_AP] = 0
     Res_0_AP[Res_0_AP != Res_0_AP] = 0
-
 
     # TEST
     pred = Res.clamp(min=args.thr) / Res.max()
@@ -365,8 +364,6 @@ def eval_batch(image, labels, evaluator, index):
     batch_label += labeled
     batch_inter += inter
     batch_union += union
-    #print("output", output.shape)
-    #print("ap labels", labels.shape)
     # ap = np.nan_to_num(get_ap_scores(output, labels))
     ap = np.nan_to_num(get_ap_scores(output_AP, labels))
     f1 = np.nan_to_num(get_f1_scores(output[0, 1].data.cpu(), labels[0]))
@@ -387,8 +384,6 @@ for batch_idx, (image, labels) in enumerate(iterator):
     else:
         images = image.to(device)
     labels = labels.to(device)
-    #print("image", image.shape)
-    #print("lables", labels.shape)
 
     correct, labeled, inter, union, ap, f1, pred, target = eval_batch(images, labels, model, batch_idx)
 
