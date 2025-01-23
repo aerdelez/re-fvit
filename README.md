@@ -22,7 +22,7 @@
 
 ## Running the Qualitative Demo
 
-1. Open `fvit-demo.ipynb` and run the notebok with the `fvit` environment.
+- Open `fvit-demo.ipynb` and run the notebok with the `fvit` environment.
 
 
 ## Running Image Segmentation
