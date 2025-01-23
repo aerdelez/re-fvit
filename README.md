@@ -5,7 +5,7 @@
 1. Removed package versions from env.yaml file.
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
 3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
-4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies
+4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies.
 5. Found a cool method using 'sys.path shenanigans' to run the baselines and notebook with conflicting imports. (Iza)
 
 
