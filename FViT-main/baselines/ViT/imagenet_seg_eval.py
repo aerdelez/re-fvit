@@ -258,8 +258,10 @@ def eval_batch(image, labels, evaluator, index):
 
     elif args.method == 'dds':
         # noise level like in the demo, to be changed later possibly
+        m = 10
         if args.attack:
             image = attack(image, model, attack_noise)
+            m = 2
         res_list = []
         for _ in range(m):
             noise_level = 8 / 255
@@ -285,11 +287,11 @@ def eval_batch(image, labels, evaluator, index):
         Res = Res.reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'attr_rollout_dds':
-
         res_list = []
-
+        m = 10
         if args.attack:
             image = attack(image, model_attr_rollout, attack_noise)
+            m = 2
 
         for _ in range(m):
             noise_level = 8 / 255
@@ -300,7 +302,7 @@ def eval_batch(image, labels, evaluator, index):
             image_noisy = image + torch.randn_like(image, ) * noise_level
             image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
             image_dds = torch.clamp(image_dds, -1, 1)
-            Res = ig.generate_ig(image.cuda())
+            Res = ig.generate_ig(image_dds.to(device))
             Res = compute_rollout_attention(Res)
             Res = Res[:, 0, 1:]
             Res = Res.reshape(batch_size, 1, 14, 14)
@@ -314,7 +316,7 @@ def eval_batch(image, labels, evaluator, index):
     # threshold between FG and BG is the mean    
     Res = (Res - Res.min()) / (Res.max() - Res.min())
 
-    # i think this is necessary for segmentation eval, hence not in the demo
+    # I think this is necessary for segmentation eval, hence not in the demo
     ret = Res.mean()
 
     Res_1 = Res.gt(ret).type(Res.type())
@@ -357,7 +359,7 @@ def eval_batch(image, labels, evaluator, index):
     batch_inter, batch_union, batch_correct, batch_label = 0, 0, 0, 0
     batch_ap, batch_f1 = 0, 0
 
-    # Segmentation resutls
+    # Segmentation results
     correct, labeled = batch_pix_accuracy(output[0].data.cpu(), labels[0])
     inter, union = batch_intersection_union(output[0].data.cpu(), labels[0], 2)
     batch_correct += correct
