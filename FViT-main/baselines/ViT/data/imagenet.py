@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 import h5py
 
+from torch.utils.data.sampler import WeightedRandomSampler
+
 __all__ = ['ImagenetResults']
 
 
@@ -73,3 +75,15 @@ class ImagenetResults(data.Dataset):
         target = torch.tensor(self.data['target'][item]).long()
 
         return image, vis, target
+
+
+# create subset of dataset keeping class ratios roughly equal
+def create_balanced_dataset_subset(imagenet_dataset, subset_ratio):
+    # assumes equal classes
+    N = len(imagenet_dataset)
+    sample_weights = [1. / N] * N
+    sampler = WeightedRandomSampler(weights=sample_weights, 
+                                    num_samples=int(N * subset_ratio), 
+                                    replacement=False
+                                    )
+    return sampler

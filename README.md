@@ -7,7 +7,7 @@
 3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
 4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies.
 5. Found a cool method using 'sys.path shenanigans' to run the baselines and notebook with conflicting imports. (Iza)
-
+6. Small method fixes (e.g. ImageNet class use in generate_visualizations)
 
 ## Setting up the Environment
 

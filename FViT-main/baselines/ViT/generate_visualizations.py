@@ -30,6 +30,11 @@ from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
 
 from torchvision.datasets import ImageNet
 
+from baselines.ViT.utils import seeder
+from baselines.ViT.data.imagenet import create_balanced_dataset_subset
+from collections import defaultdict
+import pandas as pd
+
 
 def normalize(tensor,
               mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
@@ -183,6 +188,8 @@ if __name__ == "__main__":
     parser.add_argument('--imagenet-validation-path', type=str,
                         required=True,
                         help='')
+    parser.add_argument('--seed', type=int, default=44)
+    parser.add_argument('--imagenet-subset-ratio', type=float, default=1)
     args = parser.parse_args()
 
     # PATH variables
@@ -240,11 +247,29 @@ if __name__ == "__main__":
 
     # download=False,
     imagenet_ds = ImageNet(args.imagenet_validation_path, split='val', transform=transform)
+
+    seeder.seed_everything(args.seed)
+
+    sampler = None
+    if args.imagenet_subset_ratio < 1:
+        sampler = create_balanced_dataset_subset(imagenet_ds, args.imagenet_subset_ratio)
+
     sample_loader = torch.utils.data.DataLoader(
         imagenet_ds,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4
+        num_workers=4,
+        sampler=sampler
     )
+
+    print(f"Imagenet size: {len(sample_loader)}")
+    # class_counts = defaultdict(int)
+    # df_dict = dict()
+    # for _, labels in sample_loader:
+    #     for label in labels:
+    #         class_counts[label.item()] += 1
+    # for class_idx, count in class_counts.items():
+    #     df_dict[imagenet_ds.classes[class_idx]] = count
+    # print(df_dict)
 
     compute_saliency_and_save(args)
