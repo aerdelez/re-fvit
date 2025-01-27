@@ -21,6 +21,8 @@ import glob
 
 from dataset.expl_hdf5 import ImagenetResults
 
+from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
+
 
 def normalize(tensor,
               mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
@@ -104,7 +106,24 @@ def eval(args):
 
             _norm_data = normalize(_data)
 
-            out = model(_norm_data)
+            if args.use_dds:
+                m = 10
+                res_list = []
+                image = _data
+                for _ in range(m):
+                    noise_level = 8 / 255
+                    steps = 1000
+                    start = 0.0001
+                    end = 0.02
+                    opt_t = get_opt_t(noise_level, start, end, steps)
+                    image_noisy = image + torch.randn_like(image, ) * noise_level
+                    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+                    image_dds = torch.clamp(image_dds, -1, 1)
+                    res = model(image_dds)
+                    res_list.append(res)
+                out = torch.stack(res_list).mean(0)
+            else:
+                out = model(_norm_data)
 
             pred_probabilities = torch.softmax(out, dim=1)
             pred_prob = pred_probabilities.data.max(1, keepdim=True)[0].squeeze(1)
@@ -145,8 +164,9 @@ def eval(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a segmentation')
     parser.add_argument('--batch-size', type=int,
-                        default=16,
+                        default=1,
                         help='')
+    # changed for DDS
     parser.add_argument('--neg', type=bool,
                         default=True,
                         help='')
@@ -162,7 +182,7 @@ if __name__ == "__main__":
                         choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'v_gradcam', 'lrp_last_layer',
                                  'lrp_second_layer', 'gradcam',
                                  'attn_last_layer', 'attn_gradcam', 'input_grads',
-                                 'dds'], #  TODO implement dds
+                                 ],
                         help='')
     parser.add_argument('--vis-class', type=str,
                         default='top',
@@ -177,6 +197,7 @@ if __name__ == "__main__":
     parser.add_argument('--is-ablation', type=bool,
                         default=False,
                         help='')
+    parser.add_argument('--use-dds', action='store_true', default=False, help='')
     args = parser.parse_args()
 
     torch.multiprocessing.set_start_method('spawn')
@@ -213,13 +234,17 @@ if __name__ == "__main__":
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
 
+
+    dir_method = args.method
+    if args.use_dds:
+        dir_method = 'dds'
     if args.vis_class == 'index':
-        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}_{}'.format(args.method,
+        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}_{}'.format(dir_method,
                                                           args.vis_class,
                                                           args.class_id))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}/{}'.format(args.method,
+        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}/{}'.format(dir_method,
                                                        args.vis_class, ablation_fold))
         # vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}'.format(args.method,
         #                                                                      args.vis_class))
@@ -236,7 +261,7 @@ if __name__ == "__main__":
     sample_loader = torch.utils.data.DataLoader(
         imagenet_ds,
         batch_size=args.batch_size,
-        num_workers=2,
+        num_workers=0,
         shuffle=False)
 
     eval(args)
