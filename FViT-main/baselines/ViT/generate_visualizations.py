@@ -189,7 +189,7 @@ if __name__ == "__main__":
                         required=True,
                         help='')
     parser.add_argument('--seed', type=int, default=44)
-    parser.add_argument('`--imagenet-subset-ratio`', type=float, default=1)
+    parser.add_argument('--imagenet-subset-ratio', type=float, default=1)
     args = parser.parse_args()
 
     # PATH variables
