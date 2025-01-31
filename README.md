@@ -4,10 +4,15 @@
 
 1. Removed package versions from env.yaml file to make compatible.
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
-3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
+3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability since the scripts import them.
 4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies.
 5. Edited tasks scripts to allow imports to work for themselves as well as the demo.
 6. Small method fixes (e.g. ImageNet class use in generate_visualizations)
+
+## Layout
+
+`FViT-main` is a clone of the `main` branch of the https://github.com/kaustpradalab/FViT repository at commit `860b45f`. It appears that the authors obtained the `baselines/ViT` directory from https://github.com/hila-chefer/Transformer-Explainability and extended it by adding a qualitative demo `fvit-demo.ipynb`. In order to run the demo as well as the segmentation under adversarial attack and classification under perturbation tasks, we applied the aforementioned fixes. We also crated a DDS class (DDS.py) now used in both task scripts and added Attribution Rollout to the image segmentation script as another method.
+
 
 ## Setting up the Environment
 
