@@ -6,7 +6,7 @@
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
 3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
 4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies.
-5. Found a cool method using 'sys.path shenanigans' to run the baselines and notebook with conflicting imports. (Iza)
+5. Edited tasks scripts to allow for working as both imports for the demo and standalone scripts.
 6. Small method fixes (e.g. ImageNet class use in generate_visualizations)
 
 ## Setting up the Environment
@@ -29,7 +29,7 @@
 
 1. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
 
-2. Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method='dds '`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `method='dds` makes the script utilise Denoised Diffusion Smoothing.
+2. Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method=<method> --attack --attack_noise=<attack_noise>`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `--method` argument specifies the interpretability method used for segmentation, options include `'rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer', 'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'`. `--attack` flag should be included if one wishes to replicate the method's perfomance under PGD attack with possibility of setting `--attack_noise` to any float value, which defaults to Hu's default of 8/255.
 
 
 ## Running the Image Perturbation Task
