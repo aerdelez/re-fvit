@@ -2,11 +2,11 @@
 
 ## Code Fixes
 
-1. Removed package versions from env.yaml file.
+1. Removed package versions from env.yaml file to make compatible.
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
 3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability.
 4. Added multiple packages to environmment file because of imagenet_seg_eval.py dependencies.
-5. Edited tasks scripts to allow for working as both imports for the demo and standalone scripts.
+5. Edited tasks scripts to allow imports to work for themselves as well as the demo.
 6. Small method fixes (e.g. ImageNet class use in generate_visualizations)
 
 ## Setting up the Environment
@@ -37,6 +37,6 @@
 
 2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5 and place it in the same directory as the ImageNet Devkit; a torrent utility is necessary for this source.
 
-3. Go to `FViT-main` and run `python baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/ --method chosen-method imagenet-subset-ratio subset-ratio`. This creates the visualizations needed for the perturbation task. The `--imagenet-validation-path` argument needs to specify a path to the two (compressed) ImageNet files. The subset ratio specifies what portion of the ImageNet dataset is used (between 0 and 1).
+3. Go to `FViT-main` and run `python baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/ --method chosen-method imagenet-subset-ratio subset-ratio`. This creates the visualizations needed for the perturbation task. The `--imagenet-validation-path` argument needs to specify a path to the two (compressed) ImageNet files. The `subset-ratio` specifies what portion of the ImageNet dataset is used (between 0 and 1).
 
 4. Run the perturbation test with `python baselines/ViT/pertubation_eval_from_hdf5.py --method chosen-method --use-dds`. Other flags may be modified. `--use-dds` specifies whether to use DDS with the chosen method.
