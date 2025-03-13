@@ -10,12 +10,13 @@ import os
 import sys
 import inspect
 from tqdm import tqdm
-from utils.metrices import *
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir)
+
+from baselines.ViT.utils.metrices import *
 
 from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
