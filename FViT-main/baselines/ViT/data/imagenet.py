@@ -30,7 +30,6 @@ class Imagenet_Segmentation(data.Dataset):
     def __getitem__(self, index):
 
         if self.h5py is None:
-            print('hello')
             self.h5py = h5py.File(self.path, 'r')
 
         img = np.array(self.h5py[self.h5py['/value/img'][index, 0]]).transpose((2, 1, 0))

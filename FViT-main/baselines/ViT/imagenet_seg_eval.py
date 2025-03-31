@@ -74,7 +74,8 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                             'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'],
+                             'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds',
+                             'rollout_dds', 'lrp_dds', 'gradcam_dds', 'attn_dds'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -272,7 +273,6 @@ def eval_batch(image, labels, evaluator, index):
             image_noisy = image + torch.randn_like(image, ) * noise_level
             image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
             image_dds = torch.clamp(image_dds, -1, 1)
-            # using transformer attribution because that's what they used in the demo
             Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(
                 batch_size, 1, 14, 14)
             res_list.append(Res)
@@ -308,6 +308,84 @@ def eval_batch(image, labels, evaluator, index):
             Res = Res.reshape(batch_size, 1, 14, 14)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
+
+    elif args.method == "rollout_dds":
+        res_list = []
+        m = 10
+        if args.attack:
+            image = attack(image, model, attack_noise)
+            m = 2
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps = 1000
+            start = 0.0001
+            end = 0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
+            Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
+
+    elif args.method == "lrp_dds":
+        res_list = []
+        m = 10
+        if args.attack:
+            image = attack(image, model, attack_noise)
+            m = 2
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps = 1000
+            start = 0.0001
+            end = 0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
+            Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation).reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
+
+    elif args.method == "gradcam_dds":
+        res_list = []
+        m = 10
+        if args.attack:
+            image = attack(image, model, attack_noise)
+            m = 2
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps = 1000
+            start = 0.0001
+            end = 0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
+            Res = baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
+
+    elif args.method == "attn_dds":
+        res_list = []
+        m = 10
+        if args.attack:
+            image = attack(image, model, attack_noise)
+            m = 2
+        for _ in range(m):
+            noise_level = 8 / 255
+            steps = 1000
+            start = 0.0001
+            end = 0.02
+            opt_t = get_opt_t(noise_level, start, end, steps)
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
+            Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation).reshape(batch_size, 1, 14, 14)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
+
+
 
     if args.method != 'full_lrp':
         # interpolate to full image size (224,224)
