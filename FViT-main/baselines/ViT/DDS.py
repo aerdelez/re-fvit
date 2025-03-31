@@ -1,4 +1,7 @@
 import sys
+
+import torch
+
 sys.path.append("./guided-diffusion")
 import argparse
 import os
@@ -17,6 +20,7 @@ from guided_diffusion.script_util import (
     add_dict_to_argparser,
     args_to_dict,
 )
+
 
 def diffusion_defaults():
     """
@@ -88,6 +92,7 @@ def create_argparser():
     add_dict_to_argparser(parser, defaults)
     return parser
 
+
 args = create_argparser().parse_args([])
 
 dist_util.setup_dist()
@@ -107,18 +112,22 @@ d_model.eval()
 device = next(d_model.parameters()).device
 
 shape = (1, 3, 256, 256)
-steps=1000
-start=0.0001
-end=0.02
+steps = 1000
+start = 0.0001
+end = 0.02
+
 
 def get_opt_t(delta, start, end, steps):
-    return np.clip(int(np.around(1+(steps-1)/(end-start)*(1-1/(1+delta**2)-start))), 0, steps)
+    return np.clip(int(np.around(1 + (steps - 1) / (end - start) * (1 - 1 / (1 + delta ** 2) - start))), 0, steps)
+
 
 def beta(t, steps, start, end):
-    return (t-1)/(steps-1)*(end-start)+start
+    return (t - 1) / (steps - 1) * (end - start) + start
+
 
 def add_noise(x, delta, opt_t, steps, start, end):
-    return np.sqrt(1-beta(opt_t, steps, start, end))*(x + th.randn_like(x) * delta)
+    return np.sqrt(1 - beta(opt_t, steps, start, end)) * (x + th.randn_like(x) * delta)
+
 
 def denoise(img, opt_t, steps, start, end, delta, direct_pred=False):
     img_xt = add_noise(img, delta, opt_t, steps, start, end).to(device)
@@ -126,7 +135,7 @@ def denoise(img, opt_t, steps, start, end, delta, direct_pred=False):
     indices = list(range(opt_t))[::-1]
     img_iter = img_xt
     for i in indices:
-        t = th.tensor([i]*shape[0], device=device)
+        t = th.tensor([i] * shape[0], device=device)
         # t = t.to(device)
         with th.no_grad():
             out = diffusion.p_sample(
@@ -146,22 +155,50 @@ def denoise(img, opt_t, steps, start, end, delta, direct_pred=False):
     # img_iter = img_iter.contiguous()
     return img_iter
 
+
 def range_of_delta(beta_s, beta_e, steps):
     def delta_value(beta):
-        return (beta/(1-beta))**(0.5)
+        return (beta / (1 - beta)) ** (0.5)
+
     return (delta_value(beta_s), delta_value(beta_e))
 
-trans_to_256= transforms.Compose([
-   transforms.Resize((256, 256)),])
-trans_to_224= transforms.Compose([
-   transforms.Resize((224, 224)),])
+
+trans_to_256 = transforms.Compose([
+    transforms.Resize((256, 256)), ])
+trans_to_224 = transforms.Compose([
+    transforms.Resize((224, 224)), ])
 delta_range = range_of_delta(start, end, steps)
+
+
+def apply_dds(image,
+              is_attacked,
+              callback=None,
+              noise_level=8 / 255,
+              steps=1000,
+              start=0.0001,
+              end=0.02):
+    m = 2 if is_attacked else 10
+    opt_t = get_opt_t(noise_level, start, end, steps)
+
+    image_noisy = image + torch.randn_like(image, ) * noise_level
+    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+    image_dds = torch.clamp(image_dds, -1, 1)
+
+    Res = None
+    if callback is not None:
+        res_list = []
+        for _ in range(m):
+            Res = callback(image_dds)
+            res_list.append(Res)
+        Res = torch.stack(res_list).mean(0)
+    return image_dds, Res
+
 
 def attack(image, model, noise_level, label_index=None, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
     th.backends.cudnn.deterministic = True
-    atk = torchattacks.PGD(model, eps=noise_level, alpha=noise_level/5, steps=10)
+    atk = torchattacks.PGD(model, eps=noise_level, alpha=noise_level / 5, steps=10)
     atk.set_normalization_used(mean, std)
-    labels = th.FloatTensor([0]*1000)
+    labels = th.FloatTensor([0] * 1000)
     if label_index == None:
         # with torch.no_grad():
         logits = model(image)
