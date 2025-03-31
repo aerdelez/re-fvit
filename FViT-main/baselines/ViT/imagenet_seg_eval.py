@@ -226,44 +226,50 @@ def eval_batch(image, labels, evaluator, index):
 
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
-        callback = lambda image: lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
-        callback = lambda image: lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
+        def gen(image):
+            return lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
 
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        callback = lambda image: (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
-                                  .reshape(batch_size, 1, 14, 14))
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
-        callback = lambda image: (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
-                                  .reshape(batch_size, 1, 14, 14))
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
-        callback = lambda image: (
-            lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
-            .reshape(batch_size, 1, 14, 14))
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
         # could be different look demo
-        callback = lambda image: baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'attr_rollout':
-        callback = lambda image: (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
-                                  .reshape(batch_size, 1, 14, 14))
+        def gen(image):
+            return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
+                    .reshape(batch_size, 1, 14, 14))
 
     else:
         raise NotImplementedError(f'Method {args.method} not implemented')
 
     if args.with_dds:
-        Res = apply_dds(image, args.attack, callback)[1]
+        Res = apply_dds(image, args.attack, gen)[1]
     else:
-        Res = callback(image)
+        Res = gen(image)
 
     if Res.shape[-1] != 224:
         # interpolate to full image size (224,224)
