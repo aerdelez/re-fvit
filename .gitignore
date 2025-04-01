@@ -5,10 +5,16 @@ FViT-main/fig/
 experiments/
 visualizations/
 val/
+.idea/
 *.mat
 *.tar.gz
 *.tar
 *.bin
+*.job
+*.out
+*.DS_Store
+
+
 
 # model checkpoints
 *.pt

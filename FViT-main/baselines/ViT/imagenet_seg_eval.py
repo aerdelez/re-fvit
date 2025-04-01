@@ -30,7 +30,7 @@ from baselines.ViT.ViT_LRP import vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
 from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
-from baselines.ViT.DDS import denoise, get_opt_t, attack, trans_to_224, trans_to_256
+from baselines.ViT.DDS import denoise, attack, apply_dds
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -74,8 +74,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
                     choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                             'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds',
-                             'rollout_dds', 'lrp_dds', 'gradcam_dds', 'attn_dds'],
+                             'attn_last_layer', 'attn_gradcam', 'attr_rollout'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
                     help='threshold')
@@ -102,6 +101,9 @@ parser.add_argument('--no-reg', action='store_true',
 parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
+parser.add_argument('--with-dds', action='store_true',
+                    default=False,
+                    help='Use DDS')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default=False)
 parser.add_argument('--attack_noise', type=float, default=8 / 255)
@@ -153,14 +155,15 @@ dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_worker
 model = vit_for_cam(pretrained=True).to(device)
 baselines = Baselines(model)
 
-# attribution rollout
-model_attr_rollout = vit_attr_rollout(pretrained=True).to(device)
-model_attr_rollout.eval()
-ig = IG(model_attr_rollout)
-
 # LRP
 model = vit_base_patch16_224(pretrained=True).to(device)
 lrp = LRP(model)
+
+# attribution rollout
+if args.method == 'attr_rollout':
+    model = vit_attr_rollout(pretrained=True).to(device)
+    model.eval()
+    ig = IG(model)
 
 # orig LRP
 model_orig_LRP = vit_orig_LRP(pretrained=True).to(device)
@@ -218,176 +221,57 @@ def eval_batch(image, labels, evaluator, index):
     predictions = evaluator(image)
     attack_noise = args.attack_noise
 
+    if args.attack:
+        image = attack(image, model, attack_noise)
+
     # segmentation test for the rollout baseline
     if args.method == 'rollout':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
     # segmentation test for the LRP baseline (this is full LRP, not partial)
     elif args.method == 'full_lrp':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
+        def gen(image):
+            return lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
 
     # segmentation test for our method
     elif args.method == 'transformer_attribution':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="transformer_attribution").reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the partial LRP baseline (last attn layer)
     elif args.method == 'lrp_last_layer':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation) \
-            .reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the raw attention baseline (last attn layer)
     elif args.method == 'attn_last_layer':
-        if args.attack:
-            image = attack(image, model, attack_noise)
-        Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation) \
-            .reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
+                    .reshape(batch_size, 1, 14, 14))
 
     # segmentation test for the GradCam baseline (last attn layer)
     elif args.method == 'attn_gradcam':
-        if args.attack:
-            image = attack(image, model, attack_noise)
         # could be different look demo
-        Res = baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
-
-    elif args.method == 'dds':
-        # noise level like in the demo, to be changed later possibly
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
-        res_list = []
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = lrp.generate_LRP(image_dds.to(device), start_layer=1, method="transformer_attribution").reshape(
-                batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
+        def gen(image):
+            return baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
     elif args.method == 'attr_rollout':
-        if args.attack:
-            image = attack(image, model_attr_rollout, attack_noise)
-        Res = ig.generate_ig(image.cuda())
-        Res = compute_rollout_attention(Res)
-        Res = Res[:, 0, 1:]
-        Res = Res.reshape(batch_size, 1, 14, 14)
+        def gen(image):
+            return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
+                    .reshape(batch_size, 1, 14, 14))
 
-    elif args.method == 'attr_rollout_dds':
-        res_list = []
-        m = 10
-        if args.attack:
-            image = attack(image, model_attr_rollout, attack_noise)
-            m = 2
+    else:
+        raise NotImplementedError(f'Method {args.method} not implemented')
 
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = ig.generate_ig(image_dds.to(device))
-            Res = compute_rollout_attention(Res)
-            Res = Res[:, 0, 1:]
-            Res = Res.reshape(batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
+    if args.with_dds:
+        Res = apply_dds(image, args.attack, gen)[1]
+    else:
+        Res = gen(image)
 
-    elif args.method == "rollout_dds":
-        res_list = []
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
-
-    elif args.method == "lrp_dds":
-        res_list = []
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation).reshape(batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
-
-    elif args.method == "gradcam_dds":
-        res_list = []
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
-
-    elif args.method == "attn_dds":
-        res_list = []
-        m = 10
-        if args.attack:
-            image = attack(image, model, attack_noise)
-            m = 2
-        for _ in range(m):
-            noise_level = 8 / 255
-            steps = 1000
-            start = 0.0001
-            end = 0.02
-            opt_t = get_opt_t(noise_level, start, end, steps)
-            image_noisy = image + torch.randn_like(image, ) * noise_level
-            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            image_dds = torch.clamp(image_dds, -1, 1)
-            Res = lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation).reshape(batch_size, 1, 14, 14)
-            res_list.append(Res)
-        Res = torch.stack(res_list).mean(0)
-
-
-
-    if args.method != 'full_lrp':
+    if Res.shape[-1] != 224:
         # interpolate to full image size (224,224)
         Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
 
