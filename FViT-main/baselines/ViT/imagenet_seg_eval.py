@@ -160,7 +160,7 @@ if args.transformer.lower() == "vit":
     else:
         model = vit_base_patch16_224(pretrained=True).to(device)
 elif args.transformer.lower() == 'deit':
-    model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+    model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True).to(device)
 else:
     raise NotImplementedError(f'Transformer {args.transformer} not implemented')
 
