@@ -32,6 +32,8 @@ from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
+from baselines.Deit.DeiT import create_vision_transformer_distilled
+
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
 
@@ -73,7 +75,7 @@ parser.add_argument('--train_dataset', type=str, default='imagenet', metavar='N'
                     help='Testing Dataset')
 parser.add_argument('--method', type=str,
                     default='grad_rollout',
-                    choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
+                    choices=['rollout', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
                              'attn_last_layer', 'attn_gradcam', 'attr_rollout'],
                     help='')
 parser.add_argument('--thr', type=float, default=0.,
@@ -267,7 +269,7 @@ def eval_batch(image, labels, evaluator, index):
         raise NotImplementedError(f'Method {args.method} not implemented')
 
     if args.with_dds:
-        Res = apply_dds(image, args.attack, gen)[1]
+        Res = apply_dds(image, args.attack, gen)
     else:
         Res = gen(image)
 
