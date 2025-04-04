@@ -27,11 +27,10 @@ from baselines.ViT.data.imagenet import Imagenet_Segmentation
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 # changed these two imports to match demo
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
-from baselines.ViT.ViT_LRP import vit_base_patch16_224
+from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
-from baselines.DeiT.DeiT import create_vision_transformer_distilled
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -161,7 +160,8 @@ elif args.method == 'attr_rollout':
 else:
     model = vit_base_patch16_224(pretrained=True).to(device)
 if args.transformer.lower() == 'deit':
-    model = create_vision_transformer_distilled(model)
+    model = deit_base_distilled_patch16_224(pretrained=
+    True).to(device)
 else:
     raise NotImplementedError(f'Transformer {args.transformer} not implemented')
 
