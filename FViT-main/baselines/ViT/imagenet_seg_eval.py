@@ -32,8 +32,6 @@ from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
-from baselines.Deit.DeiT import create_vision_transformer_distilled
-
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
 
