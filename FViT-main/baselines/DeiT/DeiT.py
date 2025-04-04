@@ -121,7 +121,7 @@ def create_vision_transformer_distilled(base_vit):
 
     def _create_deit(variant, pretrained=False, distilled=False, **kwargs):
         out_indices = kwargs.pop('out_indices', 3)
-        model_cls = VisionTransformerDistilled if distilled else VisionTransformer
+        model_cls = VisionTransformerDistilled if distilled else base_vit
         model = build_model_with_cfg(
             model_cls,
             variant,
@@ -397,6 +397,6 @@ def create_vision_transformer_distilled(base_vit):
         'deit3_huge_patch14_224_in21ft1k': 'deit3_huge_patch14_224.fb_in22k_ft_in1k'
     })
 
-    return VisionTransformerDistilled()
+    return deit3_base_patch16_224(pretrained=True)
 
 

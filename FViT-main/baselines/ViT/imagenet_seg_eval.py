@@ -31,6 +31,7 @@ from baselines.ViT.ViT_LRP import vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
+from baselines.DeiT.DeiT import create_vision_transformer_distilled
 
 from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
@@ -152,15 +153,15 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
-if args.transformer.lower() == "vit":
-    if args.method == 'attn_gradcam':
-        model = vit_for_cam(pretrained=True).to(device)
-    elif args.method == 'attr_rollout':
-        model = vit_attr_rollout(pretrained=True).to(device)
-    else:
-        model = vit_base_patch16_224(pretrained=True).to(device)
-elif args.transformer.lower() == 'deit':
-    model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True).to(device)
+# if args.transformer.lower() == "vit":
+if args.method == 'attn_gradcam':
+    model = vit_for_cam(pretrained=True).to(device)
+elif args.method == 'attr_rollout':
+    model = vit_attr_rollout(pretrained=True).to(device)
+else:
+    model = vit_base_patch16_224(pretrained=True).to(device)
+if args.transformer.lower() == 'deit':
+    model = create_vision_transformer_distilled(model)
 else:
     raise NotImplementedError(f'Transformer {args.transformer} not implemented')
 
