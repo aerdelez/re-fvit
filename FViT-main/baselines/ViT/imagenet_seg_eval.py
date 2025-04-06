@@ -174,6 +174,8 @@ else:
 # else:
     # raise NotImplementedError(f'Transformer {args.transformer} not implemented')
 
+print(model)
+
 # Model
 baselines = Baselines(model)
 

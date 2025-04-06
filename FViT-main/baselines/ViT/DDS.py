@@ -177,7 +177,9 @@ def apply_dds(image,
               steps=1000,
               start=0.0001,
               end=0.02):
-    m = 2 if is_attacked else 10
+    # m = 2 if is_attacked else 10
+    # TODO
+    m=5
     opt_t = get_opt_t(noise_level, start, end, steps)
 
     image_noisy = image + torch.randn_like(image, ) * noise_level
@@ -191,6 +193,8 @@ def apply_dds(image,
             Res = callback(image_dds)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
+
+    # print('end dds')
     return image_dds, Res
 
 

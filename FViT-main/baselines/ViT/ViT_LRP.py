@@ -448,5 +448,8 @@ def deit_base_distilled_patch16_224(pretrained=False, **kwargs):
             url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
             map_location="cpu", check_hash=True
         )
+        # print(checkpoint.keys())
+        # print(len(checkpoint['model']))
+        # print(checkpoint['model']['blocks.0.mlp.fc1.weight'])
         model.load_state_dict(checkpoint["model"])
     return model
