@@ -139,7 +139,7 @@ def compute_saliency_and_save(args):
                 raise NotImplementedError(f'Method {args.method} not implemented')
 
             if args.use_dds:
-                Res = apply_dds(data, args.attack, gen)[1]
+                Res = apply_dds(data, args.attack, gen)
             else:
                 Res = gen(data)
 
