@@ -8,20 +8,20 @@ import argparse
 import os
 import sys
 import inspect
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir) 
 
 # Import saliency methods and models
-from ViT_explanation_generator import Baselines
-from ViT_new import vit_base_patch16_224
-# from models.vgg import vgg19
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
+from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
+
 import glob
 
 from dataset.expl_hdf5 import ImagenetResults
-
-from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
 
 
 def normalize(tensor,
@@ -109,23 +109,6 @@ def eval(args):
 
             _norm_data = normalize(_data)
 
-            # if args.use_dds:
-            #     m = 10
-            #     res_list = []
-            #     image = _data
-            #     for _ in range(m):
-            #         noise_level = 8 / 255
-            #         steps = 1000
-            #         start = 0.0001
-            #         end = 0.02
-            #         opt_t = get_opt_t(noise_level, start, end, steps)
-            #         image_noisy = image + torch.randn_like(image, ) * noise_level
-            #         image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-            #         image_dds = torch.clamp(image_dds, -1, 1)
-            #         res = model(image_dds)
-            #         res_list.append(res)
-            #     out = torch.stack(res_list).mean(0)
-            # else:
             out = model(_norm_data)
 
             pred_probabilities = torch.softmax(out, dim=1)
@@ -209,6 +192,7 @@ if __name__ == "__main__":
                         default=False,
                         help='')
     parser.add_argument('--use-dds', action='store_true', default=False, help='')
+    parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
     args = parser.parse_args()
 
     torch.multiprocessing.set_start_method('spawn')
@@ -264,7 +248,21 @@ if __name__ == "__main__":
     imagenet_ds = ImagenetResults(vis_method_dir)
 
     # Model
-    model = vit_base_patch16_224(pretrained=True).cuda()
+    if args.method == 'attn_gradcam':
+        if args.transformer.lower() == "vit":
+            model = vit_for_cam(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_for_cam(pretrained=True).to(device)
+    elif args.method == 'attr_rollout':
+        if args.transformer.lower() == "vit":
+            model = vit_attr_rollout(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_attr_rollout(pretrained=True).to(device)
+    else:
+        if args.transformer.lower() == "vit":
+            model = vit_base_patch16_224(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_base_distilled_patch16_224(pretrained=True).to(device)
     model.eval()
 
     save_path = PATH + 'results/'
