@@ -182,20 +182,17 @@ def apply_dds(image,
     m=5
     opt_t = get_opt_t(noise_level, start, end, steps)
 
-    image_noisy = image + torch.randn_like(image, ) * noise_level
-    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-    image_dds = torch.clamp(image_dds, -1, 1)
-
     Res = None
     if callback is not None:
         res_list = []
         for _ in range(m):
+            image_noisy = image + torch.randn_like(image, ) * noise_level
+            image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            image_dds = torch.clamp(image_dds, -1, 1)
             Res = callback(image_dds)
             res_list.append(Res)
         Res = torch.stack(res_list).mean(0)
-
-    # print('end dds')
-    return image_dds, Res
+    return Res
 
 
 def attack(image, model, noise_level, label_index=None, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
