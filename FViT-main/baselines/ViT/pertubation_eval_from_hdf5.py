@@ -55,6 +55,7 @@ def eval(args):
     perturb_index = 0
 
     for batch_idx, (data, vis, target) in enumerate(tqdm(sample_loader)):
+        # print(f'start {batch_idx}')
         # Update the number of samples
         num_samples += len(data)
 
@@ -95,6 +96,8 @@ def eval(args):
 
         vis = vis.reshape(org_shape[0], -1)
 
+        # print('perturbing')
+
         for i in range(len(perturbation_steps)):
             _data = data.clone()
 
@@ -106,24 +109,24 @@ def eval(args):
 
             _norm_data = normalize(_data)
 
-            if args.use_dds:
-                m = 10
-                res_list = []
-                image = _data
-                for _ in range(m):
-                    noise_level = 8 / 255
-                    steps = 1000
-                    start = 0.0001
-                    end = 0.02
-                    opt_t = get_opt_t(noise_level, start, end, steps)
-                    image_noisy = image + torch.randn_like(image, ) * noise_level
-                    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-                    image_dds = torch.clamp(image_dds, -1, 1)
-                    res = model(image_dds)
-                    res_list.append(res)
-                out = torch.stack(res_list).mean(0)
-            else:
-                out = model(_norm_data)
+            # if args.use_dds:
+            #     m = 10
+            #     res_list = []
+            #     image = _data
+            #     for _ in range(m):
+            #         noise_level = 8 / 255
+            #         steps = 1000
+            #         start = 0.0001
+            #         end = 0.02
+            #         opt_t = get_opt_t(noise_level, start, end, steps)
+            #         image_noisy = image + torch.randn_like(image, ) * noise_level
+            #         image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
+            #         image_dds = torch.clamp(image_dds, -1, 1)
+            #         res = model(image_dds)
+            #         res_list.append(res)
+            #     out = torch.stack(res_list).mean(0)
+            # else:
+            out = model(_norm_data)
 
             pred_probabilities = torch.softmax(out, dim=1)
             pred_prob = pred_probabilities.data.max(1, keepdim=True)[0].squeeze(1)
@@ -147,6 +150,7 @@ def eval(args):
         model_index += len(target)
         perturb_index += len(target)
 
+    print('saving')
     np.save(os.path.join(args.experiment_dir, 'model_hits.npy'), num_correct_model)
     np.save(os.path.join(args.experiment_dir, 'model_dissimilarities.npy'), dissimilarity_model)
     np.save(os.path.join(args.experiment_dir, 'perturbations_hits.npy'), num_correct_pertub[:, :perturb_index])
@@ -154,6 +158,7 @@ def eval(args):
     np.save(os.path.join(args.experiment_dir, 'perturbations_logit_diff.npy'), logit_diff_pertub[:, :perturb_index])
     np.save(os.path.join(args.experiment_dir, 'perturbations_prob_diff.npy'), prob_diff_pertub[:, :perturb_index])
 
+    print('stats')
     print(np.mean(num_correct_model), np.std(num_correct_model))
     print(np.mean(dissimilarity_model), np.std(dissimilarity_model))
     print(perturbation_steps)
@@ -178,10 +183,16 @@ if __name__ == "__main__":
                         choices=['per', '100'],
                         help='')
     parser.add_argument('--method', type=str,
-                        default='grad_rollout',
-                        choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'v_gradcam', 'lrp_last_layer',
-                                 'lrp_second_layer', 'gradcam',
-                                 'attn_last_layer', 'attn_gradcam', 'input_grads',
+                        required=True,
+                        choices=['rollout', 
+                                #  'lrp', 
+                                 'transformer_attribution', 
+                                #  'full_lrp', 'v_gradcam', 
+                                 'lrp_last_layer',
+                                #  'lrp_second_layer', 'gradcam',
+                                 'attn_last_layer', 'attn_gradcam', 
+                                #  'input_grads',
+                                 'attr_rollout'
                                  ],
                         help='')
     parser.add_argument('--vis-class', type=str,
@@ -237,7 +248,7 @@ if __name__ == "__main__":
 
     dir_method = args.method
     if args.use_dds:
-        dir_method = 'dds'
+        dir_method = 'dds_' + dir_method
     if args.vis_class == 'index':
         vis_method_dir = os.path.join(PATH,'visualizations/{}/{}_{}'.format(dir_method,
                                                           args.vis_class,

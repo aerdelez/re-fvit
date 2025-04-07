@@ -11,6 +11,7 @@ import sys
 import inspect
 from tqdm import tqdm
 from utils.metrices import *
+import timm
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -25,10 +26,9 @@ from baselines.ViT.data.imagenet import Imagenet_Segmentation
 
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 # changed these two imports to match demo
-from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
-from baselines.ViT.ViT_LRP import vit_base_patch16_224
-from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout
-from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
+from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
@@ -108,6 +108,7 @@ parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default=False)
 parser.add_argument('--attack_noise', type=float, default=8 / 255)
 parser.add_argument('--seed', type=int, default=44)
+parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -151,24 +152,38 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
+# if args.transformer.lower() == "vit":
+if args.method == 'attn_gradcam':
+    if args.transformer.lower() == "vit":
+        model = vit_for_cam(pretrained=True).to(device)
+    elif args.transformer.lower() == "deit":
+        model = deit_for_cam(pretrained=True).to(device)
+elif args.method == 'attr_rollout':
+    if args.transformer.lower() == "vit":
+        model = vit_attr_rollout(pretrained=True).to(device)
+    elif args.transformer.lower() == "deit":
+        model = deit_attr_rollout(pretrained=True).to(device)
+else:
+    if args.transformer.lower() == "vit":
+        model = vit_base_patch16_224(pretrained=True).to(device)
+    elif args.transformer.lower() == "deit":
+        model = deit_base_distilled_patch16_224(pretrained=True).to(device)
+# if args.transformer.lower() == 'deit':
+#     model = deit_base_distilled_patch16_224(pretrained=
+#     True).to(device)
+# else:
+    # raise NotImplementedError(f'Transformer {args.transformer} not implemented')
+
+print(model)
+
 # Model
-model = vit_for_cam(pretrained=True).to(device)
 baselines = Baselines(model)
 
 # LRP
-model = vit_base_patch16_224(pretrained=True).to(device)
 lrp = LRP(model)
 
 # attribution rollout
-if args.method == 'attr_rollout':
-    model = vit_attr_rollout(pretrained=True).to(device)
-    model.eval()
-    ig = IG(model)
-
-# orig LRP
-model_orig_LRP = vit_orig_LRP(pretrained=True).to(device)
-model_orig_LRP.eval()
-orig_lrp = LRP(model_orig_LRP)
+ig = IG(model)
 
 metric = IoU(2, ignore_index=-1)
 

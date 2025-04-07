@@ -15,18 +15,13 @@ sys.path.insert(0, parentdir)
 # Import saliency methods and models
 from misc_functions import *
 
-from ViT_explanation_generator import Baselines, LRP
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 
-# from ViT_new import vit_base_patch16_224
-# from ViT_LRP import vit_base_patch16_224 as vit_LRP
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
+from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
 
-# changed these two imports to match demo
-from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam
-from baselines.ViT.ViT_LRP import vit_base_patch16_224 
-
-from ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
-
-from baselines.ViT.DDS import denoise, get_opt_t, trans_to_224, trans_to_256
+from baselines.ViT.DDS import apply_dds, attack, denoise, get_opt_t, trans_to_224, trans_to_256
 
 from torchvision.datasets import ImageNet
 
@@ -43,6 +38,20 @@ def normalize(tensor,
     std = torch.as_tensor(std, dtype=dtype, device=tensor.device)
     tensor.sub_(mean[None, :, None, None]).div_(std[None, :, None, None])
     return tensor
+
+
+def compute_rollout_attention(all_layer_matrices, start_layer=0):
+    # adding residual consideration- code adapted from https://github.com/samiraabnar/attention_flow
+    num_tokens = all_layer_matrices[0].shape[1]
+    batch_size = all_layer_matrices[0].shape[0]
+    eye = torch.eye(num_tokens).expand(batch_size, num_tokens, num_tokens).to(all_layer_matrices[0].device)
+    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
+    matrices_aug = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
+                    for i in range(len(all_layer_matrices))]
+    joint_attention = matrices_aug[start_layer]
+    for i in range(start_layer + 1, len(matrices_aug)):
+        joint_attention = matrices_aug[i].bmm(joint_attention)
+    return joint_attention
 
 
 def compute_saliency_and_save(args):
@@ -88,55 +97,55 @@ def compute_saliency_and_save(args):
             if args.vis_class == 'target':
                 index = target
 
+            # TODO attack before or after target
+            if args.attack:
+                image = attack(image, model, args['attack_noise'])
+
+            # perturbation test for the rollout baseline
             if args.method == 'rollout':
-                # Res = baselines.generate_rollout(data, start_layer=1).reshape(data.shape[0], 1, 14, 14)
-                Res = lrp.generate_LRP(data, method="rollout").reshape(data.shape[0], 1, 14, 14)
+                def gen(image):
+                    return lrp.generate_LRP(image.to(device), method="rollout", start_layer=1).reshape(args.batch_size, 1, 14, 14)
 
-            elif args.method == 'lrp':
-                Res = lrp.generate_LRP(data, start_layer=1, index=index).reshape(data.shape[0], 1, 14, 14)
-                # no change?
-
-            elif args.method == 'transformer_attribution':
-                # Res = lrp.generate_LRP(data, start_layer=1, method="grad", index=index).reshape(data.shape[0], 1, 14, 14)
-                Res = lrp.generate_LRP(data, method="transformer_attribution").reshape(data.shape[0], 1, 14, 14)
-
+            # perturbation test for the LRP baseline (this is full LRP, not partial)
             elif args.method == 'full_lrp':
-                # Res = orig_lrp.generate_LRP(data, method="full", index=index).reshape(data.shape[0], 1, 224, 224)
-                Res = lrp.generate_LRP(data, method="full").reshape(data.shape[0], 1, 224, 224)
+                def gen(image):
+                    return lrp.generate_LRP(image.to(device), method="full", index=index, start_layer=1).reshape(args.batch_size, 1, 224, 224)
 
+            # perturbation test for our method
+            elif args.method == 'transformer_attribution':
+                def gen(image):
+                    return (lrp.generate_LRP(image.to(device), start_layer=1, index=index, method="transformer_attribution").reshape(args.batch_size, 1, 14, 14))
+
+            # perturbation test for the partial LRP baseline (last attn layer)
             elif args.method == 'lrp_last_layer':
-                # Res = orig_lrp.generate_LRP(data, method="last_layer", is_ablation=args.is_ablation, index=index) \
-                #     .reshape(data.shape[0], 1, 14, 14)
-                Res = lrp.generate_LRP(data, method="last_layer", is_ablation=args.is_ablation).reshape(data.shape[0], 1, 14, 14)
+                def gen(image):
+                    return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation, index=index).reshape(args.batch_size, 1, 14, 14))
 
+            # perturbation test for the raw attention baseline (last attn layer)
             elif args.method == 'attn_last_layer':
-                # Res = lrp.generate_LRP(data, method="last_layer_attn", is_ablation=args.is_ablation) \
-                #     .reshape(data.shape[0], 1, 14, 14)
-                 Res = lrp.generate_LRP(data, method="last_layer_attn", is_ablation=args.is_ablation).reshape(data.shape[0], 1, 14, 14)
+                def gen(image):
+                    return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation, index=index).reshape(args.batch_size, 1, 14, 14))
 
+            # perturbation test for the GradCam baseline (last attn layer)
             elif args.method == 'attn_gradcam':
-                Res = baselines.generate_cam_attn(data, index=index).reshape(data.shape[0], 1, 14, 14)
+                # could be different look demo
+                def gen(image):
+                    return baselines.generate_cam_attn(image.to(device), index=index).reshape(args.batch_size, 1, 14, 14)
 
-            elif args.method == 'dds':
-                # TODO hyperparams, possibly changed later
-                m = 10
-                res_list = []
-                image = data
-                for _ in range(m):
-                    noise_level = 8 / 255
-                    steps = 1000
-                    start = 0.0001
-                    end = 0.02
-                    opt_t = get_opt_t(noise_level, start, end, steps)
-                    image_noisy = image + torch.randn_like(image, ) * noise_level
-                    image_dds = trans_to_224(denoise(trans_to_256(image_noisy), opt_t, steps, start, end, noise_level))
-                    image_dds = torch.clamp(image_dds, -1, 1)
-                    Res = lrp.generate_LRP(image_dds, start_layer=1, method="transformer_attribution", index=index).reshape(data.shape[0], 1, 14, 14)
-                    res_list.append(Res)
-                Res = torch.stack(res_list).mean(0)
+            elif args.method == 'attr_rollout':
+                def gen(image):
+                    return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:].reshape(args.batch_size, 1, 14, 14))
+            else:
+                raise NotImplementedError(f'Method {args.method} not implemented')
 
-            if args.method != 'full_lrp' and args.method != 'input_grads':
-                Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').cuda()
+            if args.use_dds:
+                Res = apply_dds(data, args.attack, gen)[1]
+            else:
+                Res = gen(data)
+
+            if Res.shape[-1] != 224:
+                # interpolate to full image size (224,224)
+                Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
             
             Res = (Res - Res.min()) / (Res.max() - Res.min())
 
@@ -150,9 +159,11 @@ if __name__ == "__main__":
                         help='')
     parser.add_argument('--method', type=str,
                         default='grad_rollout',
-                        choices=['rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer',
-                                 'attn_last_layer', 'attn_gradcam',
-                                 'dds'],
+                        choices=['rollout', 'lrp', 'transformer_attribution', 'lrp_last_layer',
+                                 'attn_last_layer', 'attn_gradcam', 'attr_rollout',
+                                #  'full_lrp', 
+                                 'dds_rollout', 'dds_lrp', 'dds_transformer_attribution', 'dds_lrp_last_layer',
+                                 'dds_attn_last_layer', 'dds_attn_gradcam', 'dds_attr_rollout'],
                         help='')
     parser.add_argument('--lmd', type=float,
                         default=10,
@@ -190,54 +201,79 @@ if __name__ == "__main__":
                         help='')
     parser.add_argument('--seed', type=int, default=44)
     parser.add_argument('--imagenet-subset-ratio', type=float, default=1)
+    parser.add_argument('--attack', action='store_true', default=False)
+    parser.add_argument('--attack_noise', type=float, default=8 / 255)
+    parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
+    parser.add_argument('--use-dds', action='store_true', default=False, help='Use DDS')
     args = parser.parse_args()
 
     # PATH variables
     PATH = os.path.dirname(os.path.abspath(__file__)) + '/'
     os.makedirs(os.path.join(PATH, 'visualizations'), exist_ok=True)
 
+    dir_method = args.method
+    if args.use_dds:
+        dir_method = 'dds_' + dir_method
     try:
-        os.remove(os.path.join(PATH, 'visualizations/{}/{}/results.hdf5'.format(args.method,
-                                                                                args.vis_class)))
+        os.remove(os.path.join(PATH, 'visualizations/{}/{}/results.hdf5'.format(dir_method, args.vis_class)))
     except OSError:
         pass
 
 
-    os.makedirs(os.path.join(PATH, 'visualizations/{}'.format(args.method)), exist_ok=True)
+    os.makedirs(os.path.join(PATH, 'visualizations/{}'.format(dir_method)), exist_ok=True)
     if args.vis_class == 'index':
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}'.format(args.method,
-                                                                        args.vis_class,
-                                                                        args.class_id)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}'.format(args.method,
-                                                                              args.vis_class,
-                                                                              args.class_id))
+        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}'.format(dir_method, args.vis_class, args.class_id)), exist_ok=True)
+        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}'.format(dir_method, args.vis_class, args.class_id))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}/{}'.format(args.method,
-                                                                     args.vis_class, ablation_fold)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}/{}'.format(args.method,
-                                                                           args.vis_class, ablation_fold))
+        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}/{}'.format(dir_method, args.vis_class, ablation_fold)), exist_ok=True)
+        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}/{}'.format(dir_method, args.vis_class, ablation_fold))
 
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
 
+    if args.method == 'attn_gradcam':
+        if args.transformer.lower() == "vit":
+            model = vit_for_cam(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_for_cam(pretrained=True).to(device)
+    elif args.method == 'attr_rollout':
+        if args.transformer.lower() == "vit":
+            model = vit_attr_rollout(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_attr_rollout(pretrained=True).to(device)
+    else:
+        if args.transformer.lower() == "vit":
+            model = vit_base_patch16_224(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_base_distilled_patch16_224(pretrained=True).to(device)
+
+    # Model
+    baselines = Baselines(model)
+
+    # LRP
+    lrp = LRP(model)
+
+    # attribution rollout
+    ig = IG(model)
+
     # Model
     # model = vit_base_patch16_224(pretrained=True).cuda()
     # baselines = Baselines(model)
-    model = vit_for_cam(pretrained=True).cuda()
-    baselines = Baselines(model)
+    # model = vit_for_cam(pretrained=True).cuda()
+    # baselines = Baselines(model)
 
     # LRP
     # model_LRP = vit_LRP(pretrained=True).cuda()
     # model_LRP.eval()
     # lrp = LRP(model_LRP)
-    model = vit_base_patch16_224(pretrained=True).cuda()
-    lrp = LRP(model)
+    # model = vit_base_patch16_224(pretrained=True).cuda()
+    # lrp = LRP(model)
 
     # orig LRP
-    model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
-    model_orig_LRP.eval()
-    orig_lrp = LRP(model_orig_LRP)
+    # model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
+    # model_orig_LRP.eval()
+    # orig_lrp = LRP(model_orig_LRP)
 
     # Dataset loader for sample images
     transform = transforms.Compose([
