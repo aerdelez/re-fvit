@@ -156,8 +156,8 @@ if __name__ == "__main__":
                         default=1,
                         help='')
     # changed for DDS
-    parser.add_argument('--neg', type=bool,
-                        default=True,
+    parser.add_argument('--neg', action='store_true',
+                        default=False,
                         help='')
     parser.add_argument('--value', action='store_true',
                         default=False,
