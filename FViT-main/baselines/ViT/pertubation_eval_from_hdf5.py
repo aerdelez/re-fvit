@@ -1,4 +1,3 @@
-
 import torch
 import os
 from tqdm import tqdm
@@ -12,12 +11,13 @@ import inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
-sys.path.insert(0, parentdir) 
+sys.path.insert(0, parentdir)
 
 # Import saliency methods and models
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
 from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
-from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, \
+    deit_base_distilled_patch16_224 as deit_attr_rollout
 
 import glob
 
@@ -35,8 +35,8 @@ def normalize(tensor,
 
 def eval(args):
     num_samples = 0
-    num_correct_model = np.zeros((len(imagenet_ds,)))
-    dissimilarity_model = np.zeros((len(imagenet_ds,)))
+    num_correct_model = np.zeros((len(imagenet_ds, )))
+    dissimilarity_model = np.zeros((len(imagenet_ds, )))
     model_index = 0
 
     if args.scale == 'per':
@@ -71,13 +71,13 @@ def eval(args):
         pred_org_prob = pred_probabilities.data.max(1, keepdim=True)[0].squeeze(1)
         pred_class = pred.data.max(1, keepdim=True)[1].squeeze(1)
         tgt_pred = (target == pred_class).type(target.type()).data.cpu().numpy()
-        num_correct_model[model_index:model_index+len(tgt_pred)] = tgt_pred
+        num_correct_model[model_index:model_index + len(tgt_pred)] = tgt_pred
 
         probs = torch.softmax(pred, dim=1)
         target_probs = torch.gather(probs, 1, target[:, None])[:, 0]
         second_probs = probs.data.topk(2, dim=1)[0][:, 1]
         temp = torch.log(target_probs / second_probs).data.cpu().numpy()
-        dissimilarity_model[model_index:model_index+len(temp)] = temp
+        dissimilarity_model[model_index:model_index + len(temp)] = temp
 
         if args.wrong:
             wid = np.argwhere(tgt_pred == 0).flatten()
@@ -114,21 +114,21 @@ def eval(args):
             pred_probabilities = torch.softmax(out, dim=1)
             pred_prob = pred_probabilities.data.max(1, keepdim=True)[0].squeeze(1)
             diff = (pred_prob - pred_org_prob).data.cpu().numpy()
-            prob_diff_pertub[i, perturb_index:perturb_index+len(diff)] = diff
+            prob_diff_pertub[i, perturb_index:perturb_index + len(diff)] = diff
 
             pred_logit = out.data.max(1, keepdim=True)[0].squeeze(1)
             diff = (pred_logit - pred_org_logit).data.cpu().numpy()
-            logit_diff_pertub[i, perturb_index:perturb_index+len(diff)] = diff
+            logit_diff_pertub[i, perturb_index:perturb_index + len(diff)] = diff
 
             target_class = out.data.max(1, keepdim=True)[1].squeeze(1)
             temp = (target == target_class).type(target.type()).data.cpu().numpy()
-            num_correct_pertub[i, perturb_index:perturb_index+len(temp)] = temp
+            num_correct_pertub[i, perturb_index:perturb_index + len(temp)] = temp
 
             probs_pertub = torch.softmax(out, dim=1)
             target_probs = torch.gather(probs_pertub, 1, target[:, None])[:, 0]
             second_probs = probs_pertub.data.topk(2, dim=1)[0][:, 1]
             temp = torch.log(target_probs / second_probs).data.cpu().numpy()
-            dissimilarity_pertub[i, perturb_index:perturb_index+len(temp)] = temp
+            dissimilarity_pertub[i, perturb_index:perturb_index + len(temp)] = temp
 
         model_index += len(target)
         perturb_index += len(target)
@@ -137,7 +137,8 @@ def eval(args):
     np.save(os.path.join(args.experiment_dir, 'model_hits.npy'), num_correct_model)
     np.save(os.path.join(args.experiment_dir, 'model_dissimilarities.npy'), dissimilarity_model)
     np.save(os.path.join(args.experiment_dir, 'perturbations_hits.npy'), num_correct_pertub[:, :perturb_index])
-    np.save(os.path.join(args.experiment_dir, 'perturbations_dissimilarities.npy'), dissimilarity_pertub[:, :perturb_index])
+    np.save(os.path.join(args.experiment_dir, 'perturbations_dissimilarities.npy'),
+            dissimilarity_pertub[:, :perturb_index])
     np.save(os.path.join(args.experiment_dir, 'perturbations_logit_diff.npy'), logit_diff_pertub[:, :perturb_index])
     np.save(os.path.join(args.experiment_dir, 'perturbations_prob_diff.npy'), prob_diff_pertub[:, :perturb_index])
 
@@ -167,14 +168,14 @@ if __name__ == "__main__":
                         help='')
     parser.add_argument('--method', type=str,
                         required=True,
-                        choices=['rollout', 
-                                #  'lrp', 
-                                 'transformer_attribution', 
-                                #  'full_lrp', 'v_gradcam', 
+                        choices=['rollout',
+                                 #  'lrp',
+                                 'transformer_attribution',
+                                 #  'full_lrp', 'v_gradcam',
                                  'lrp_last_layer',
-                                #  'lrp_second_layer', 'gradcam',
-                                 'attn_last_layer', 'attn_gradcam', 
-                                #  'input_grads',
+                                 #  'lrp_second_layer', 'gradcam',
+                                 'attn_last_layer', 'attn_gradcam',
+                                 #  'input_grads',
                                  'attr_rollout'
                                  ],
                         help='')
@@ -192,6 +193,7 @@ if __name__ == "__main__":
                         default=False,
                         help='')
     parser.add_argument('--use-dds', action='store_true', default=False, help='')
+    parser.add_argument('--attack_noise', type=float, default=0)
     parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
     args = parser.parse_args()
 
@@ -203,18 +205,25 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(PATH, 'experiments'), exist_ok=True)
     os.makedirs(os.path.join(PATH, 'experiments/perturbations'), exist_ok=True)
 
+    if args.attack_noise >= 1:
+        args.attack_noise /= 255
+
     exp_name = args.method
     exp_name += '_neg' if args.neg else '_pos'
+    exp_name += '_' + str(args.attack_noise)
     print(exp_name)
 
     if args.vis_class == 'index':
-        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}'.format(exp_name,
-                                                                                       args.vis_class,
-                                                                                       args.class_id))
+        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}_{}'.format(exp_name,
+                                                                                          args.vis_class,
+                                                                                          args.class_id,
+                                                                                          args.attack_noise))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}/{}'.format(exp_name,
-                                                                                    args.vis_class, ablation_fold))
+        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}/{}'.format(exp_name,
+                                                                                          args.vis_class,
+                                                                                          args.attack_noise,
+                                                                                          ablation_fold))
         # args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}'.format(exp_name,
         #                                                                             args.vis_class))
 
@@ -229,18 +238,20 @@ if __name__ == "__main__":
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
 
-
     dir_method = args.method
     if args.use_dds:
         dir_method = 'dds_' + dir_method
     if args.vis_class == 'index':
-        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}_{}'.format(dir_method,
-                                                          args.vis_class,
-                                                          args.class_id))
+        vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method,
+                                                                                args.vis_class,
+                                                                                args.class_id,
+                                                                                args.attack_noise))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        vis_method_dir = os.path.join(PATH,'visualizations/{}/{}/{}'.format(dir_method,
-                                                       args.vis_class, ablation_fold))
+        vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method,
+                                                                                args.vis_class,
+                                                                                args.attack_noise,
+                                                                                ablation_fold))
         # vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}'.format(args.method,
         #                                                                      args.vis_class))
 
