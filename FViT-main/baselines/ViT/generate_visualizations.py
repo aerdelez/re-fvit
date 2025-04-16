@@ -139,8 +139,9 @@ def compute_saliency_and_save(args):
                 args.attack = True
             if args.attack:
                 if args.attack_noise >= 1:
-                    args.attack_noise /= 255
-                data = attack(data, model, args.attack_noise)
+                    data = attack(data, model, args.attack_noise / 255)
+                else:
+                    data = attack(data, model, args.attack_noise)
 
             if args.use_dds:
                 # True is for attack
