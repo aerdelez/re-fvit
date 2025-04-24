@@ -205,8 +205,8 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(PATH, 'experiments'), exist_ok=True)
     os.makedirs(os.path.join(PATH, 'experiments/perturbations'), exist_ok=True)
 
-    if args.attack_noise >= 1:
-        args.attack_noise /= 255
+    # if args.attack_noise >= 1:
+    #     args.attack_noise /= 255
 
     exp_name = args.method
     exp_name += '_neg' if args.neg else '_pos'
