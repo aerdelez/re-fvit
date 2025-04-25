@@ -7,11 +7,11 @@ methods=("transformer_attribution" "rollout" "attn_last_layer")
 # Loop over each method and submit a separate sbatch job
 for method in "${methods[@]}"; do
     for is_neg in 0 1; do
-        for attack_noise in  8 16 24 32; do
+        for attack_noise in 0 8 16 24 32; do
             # Determine if the current task should use the --with-dds flag
             for use_dds in 0 1; do
               # if method is not transformer_attribution and use_dds is 1, skip
-                if [[ "$method" != "transformer_attribution" && $use_dds -eq 1 ]]; then
+                if [[ "$method" != "transformer_attribution" && ($use_dds -eq 1 || $attack_noise -gt 0) ]]; then
                     continue
                 fi
                 if [ $use_dds -eq 1 ]; then

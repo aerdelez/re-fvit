@@ -211,19 +211,19 @@ if __name__ == "__main__":
     exp_name = args.method
     exp_name += '_neg' if args.neg else '_pos'
     exp_name += '_' + str(args.attack_noise)
+    if args.use_dds:
+        exp_name += '_dds'
     print(exp_name)
 
     if args.vis_class == 'index':
-        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}_{}'.format(exp_name,
-                                                                                          args.vis_class,
-                                                                                          args.class_id,
-                                                                                          args.attack_noise))
+        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}'.format(exp_name,
+                                                                                       args.vis_class,
+                                                                                       args.class_id))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}_{}/{}'.format(exp_name,
-                                                                                          args.vis_class,
-                                                                                          args.attack_noise,
-                                                                                          ablation_fold))
+        args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}/{}'.format(exp_name,
+                                                                                       args.vis_class,
+                                                                                       ablation_fold))
         # args.runs_dir = os.path.join(PATH, 'experiments/perturbations/{}/{}'.format(exp_name,
         #                                                                             args.vis_class))
 
@@ -248,10 +248,18 @@ if __name__ == "__main__":
                                                                                 args.attack_noise))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method,
-                                                                                args.vis_class,
-                                                                                args.attack_noise,
-                                                                                ablation_fold))
+        # Fixme: if statement is a fix to compatibility with old results.
+        # If visualisations are rerun, delete the else statement and move the content of if statement out
+        if args.attack_noise > 0:
+            vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method,
+                                                                                    args.vis_class,
+                                                                                    args.attack_noise,
+                                                                                    ablation_fold))
+        else:
+            vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}/{}'.format(dir_method,
+                                                                                 args.vis_class,
+                                                                                 ablation_fold))
+
         # vis_method_dir = os.path.join(PATH, 'visualizations/{}/{}'.format(args.method,
         #                                                                      args.vis_class))
 
