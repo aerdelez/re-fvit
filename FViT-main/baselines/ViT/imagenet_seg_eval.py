@@ -29,7 +29,8 @@ from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
 from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
-from baselines.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
