@@ -29,6 +29,8 @@ from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
 from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
 from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
+from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
+
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
@@ -109,6 +111,7 @@ parser.add_argument('--attack', action='store_true', default=False)
 parser.add_argument('--attack_noise', type=float, default=8 / 255)
 parser.add_argument('--seed', type=int, default=44)
 parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
+parser.add_argument("--implementation-method", type=str, default="Hu", help="Hu or Chefer")
 args = parser.parse_args()
 
 args.checkname = args.method + '_' + args.arc
@@ -152,28 +155,36 @@ ds = Imagenet_Segmentation(args.imagenet_seg_path,
                            transform=test_img_trans, target_transform=test_lbl_trans)
 dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
-# if args.transformer.lower() == "vit":
-if args.method == 'attn_gradcam':
-    if args.transformer.lower() == "vit":
-        model = vit_for_cam(pretrained=True).to(device)
-    elif args.transformer.lower() == "deit":
-        model = deit_for_cam(pretrained=True).to(device)
-elif args.method == 'attr_rollout':
-    if args.transformer.lower() == "vit":
-        model = vit_attr_rollout(pretrained=True).to(device)
-    elif args.transformer.lower() == "deit":
-        model = deit_attr_rollout(pretrained=True).to(device)
-else:
-    if args.transformer.lower() == "vit":
-        model = vit_base_patch16_224(pretrained=True).to(device)
-    elif args.transformer.lower() == "deit":
-        model = deit_base_distilled_patch16_224(pretrained=True).to(device)
-# if args.transformer.lower() == 'deit':
-#     model = deit_base_distilled_patch16_224(pretrained=
-#     True).to(device)
-# else:
-    # raise NotImplementedError(f'Transformer {args.transformer} not implemented')
 
+if args.implementation_method.lower() == "hu":
+    if args.method == 'attn_gradcam':
+        if args.transformer.lower() == "vit":
+            model = vit_for_cam(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_for_cam(pretrained=True).to(device)
+    elif args.method == 'attr_rollout':
+        if args.transformer.lower() == "vit":
+            model = vit_attr_rollout(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_attr_rollout(pretrained=True).to(device)
+    else:
+        if args.transformer.lower() == "vit":
+            model = vit_base_patch16_224(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_base_distilled_patch16_224(pretrained=True).to(device)
+if args.implementation_method.lower() == "chefer":
+    if args.method in ["full_lrp", "lrp_last_layer", "attn_last_layer"]:
+        model = vit_orig_LRP(pretrained=True).to(device)
+    elif args.method in ["rollout", "attn_gradcam"]:
+        model = vit_for_cam(pretrained=True).to(device)
+    elif args.method == "transformer_attribution":
+        model = vit_base_patch16_224(pretrained=True).to(device)
+else:
+    # invalid implementation_method
+    raise ValueError(f"Invalid implementation_method: {args.implementation_method}.")
+
+
+model.eval()
 print(model)
 
 # Model
@@ -239,47 +250,78 @@ def eval_batch(image, labels, evaluator, index):
     if args.attack:
         image = attack(image, model, attack_noise)
 
-    # segmentation test for the rollout baseline
-    if args.method == 'rollout':
-        def gen(image):
-            return lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
+    if args.implementation_method.lower() == "hu":
+        # segmentation test for the rollout baseline
+        if args.method == 'rollout':
+            def gen(image):
+                return lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
-    # segmentation test for the LRP baseline (this is full LRP, not partial)
-    elif args.method == 'full_lrp':
-        def gen(image):
-            return lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
+        # segmentation test for the LRP baseline (this is full LRP, not partial)
+        elif args.method == 'full_lrp':
+            def gen(image):
+                return lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
 
-    # segmentation test for our method
-    elif args.method == 'transformer_attribution':
-        def gen(image):
-            return (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
-                    .reshape(batch_size, 1, 14, 14))
+        # segmentation test for our method
+        elif args.method == 'transformer_attribution':
+            def gen(image):
+                return (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
+                        .reshape(batch_size, 1, 14, 14))
 
-    # segmentation test for the partial LRP baseline (last attn layer)
-    elif args.method == 'lrp_last_layer':
-        def gen(image):
-            return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
-                    .reshape(batch_size, 1, 14, 14))
+        # segmentation test for the partial LRP baseline (last attn layer)
+        elif args.method == 'lrp_last_layer':
+            def gen(image):
+                return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
+                        .reshape(batch_size, 1, 14, 14))
 
-    # segmentation test for the raw attention baseline (last attn layer)
-    elif args.method == 'attn_last_layer':
-        def gen(image):
-            return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
-                    .reshape(batch_size, 1, 14, 14))
+        # segmentation test for the raw attention baseline (last attn layer)
+        elif args.method == 'attn_last_layer':
+            def gen(image):
+                return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
+                        .reshape(batch_size, 1, 14, 14))
 
-    # segmentation test for the GradCam baseline (last attn layer)
-    elif args.method == 'attn_gradcam':
-        # could be different look demo
-        def gen(image):
-            return baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
+        # segmentation test for the GradCam baseline (last attn layer)
+        elif args.method == 'attn_gradcam':
+            # could be different look demo
+            def gen(image):
+                return baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
-    elif args.method == 'attr_rollout':
-        def gen(image):
-            return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
-                    .reshape(batch_size, 1, 14, 14))
+        elif args.method == 'attr_rollout':
+            def gen(image):
+                return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
+                        .reshape(batch_size, 1, 14, 14))
 
-    else:
-        raise NotImplementedError(f'Method {args.method} not implemented')
+        else:
+            raise NotImplementedError(f'Method {args.method} not implemented')
+    elif args.implementation_method.lower() == "chefer":
+        def gen(image):
+            if args.method == 'rollout':
+                return baselines.generate_rollout(image.cuda(), start_layer=1).reshape(batch_size, 1, 14, 14)
+
+            # segmentation test for the LRP baseline (this is full LRP, not partial)
+            elif args.method == 'full_lrp':
+                return lrp.generate_LRP(image.cuda(), method="full").reshape(batch_size, 1, 224, 224)
+
+            # segmentation test for our method
+            elif args.method == 'transformer_attribution':
+                return lrp.generate_LRP(image.cuda(), start_layer=1, method="transformer_attribution").reshape(
+                    batch_size, 1, 14, 14)
+
+            # segmentation test for the partial LRP baseline (last attn layer)
+            elif args.method == 'lrp_last_layer':
+                return lrp.generate_LRP(image.cuda(), method="last_layer", is_ablation=args.is_ablation) \
+                    .reshape(batch_size, 1, 14, 14)
+
+            # segmentation test for the raw attention baseline (last attn layer)
+            elif args.method == 'attn_last_layer':
+                return lrp.generate_LRP(image.cuda(), method="last_layer_attn", is_ablation=args.is_ablation) \
+                    .reshape(batch_size, 1, 14, 14)
+
+            # segmentation test for the GradCam baseline (last attn layer)
+            elif args.method == 'attn_gradcam':
+                return baselines.generate_cam_attn(image.cuda()).reshape(batch_size, 1, 14, 14)
+
+            else:
+                raise NotImplementedError(f"Method {args.method} not implemented")
 
     if args.with_dds:
         Res = apply_dds(image, args.attack, gen)

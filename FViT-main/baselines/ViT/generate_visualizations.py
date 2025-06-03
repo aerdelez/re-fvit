@@ -97,10 +97,6 @@ def compute_saliency_and_save(args):
             if args.vis_class == 'target':
                 index = target
 
-            # TODO attack before or after target
-            if args.attack:
-                image = attack(image, model, args['attack_noise'])
-
             # perturbation test for the rollout baseline
             if args.method == 'rollout':
                 def gen(image):
@@ -138,8 +134,18 @@ def compute_saliency_and_save(args):
             else:
                 raise NotImplementedError(f'Method {args.method} not implemented')
 
+            # TODO attack before or after target
+            if args.attack_noise > 0:
+                args.attack = True
+            if args.attack:
+                if args.attack_noise >= 1:
+                    data = attack(data, model, args.attack_noise / 255)
+                else:
+                    data = attack(data, model, args.attack_noise)
+
             if args.use_dds:
-                Res = apply_dds(data, args.attack, gen)[1]
+                # True is for attack
+                Res = apply_dds(data, True, gen)
             else:
                 Res = gen(data)
 
@@ -202,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=44)
     parser.add_argument('--imagenet-subset-ratio', type=float, default=1)
     parser.add_argument('--attack', action='store_true', default=False)
-    parser.add_argument('--attack_noise', type=float, default=8 / 255)
+    parser.add_argument('--attack_noise', type=float, default=0)
     parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
     parser.add_argument('--use-dds', action='store_true', default=False, help='Use DDS')
     args = parser.parse_args()
@@ -219,15 +225,14 @@ if __name__ == "__main__":
     except OSError:
         pass
 
-
     os.makedirs(os.path.join(PATH, 'visualizations/{}'.format(dir_method)), exist_ok=True)
     if args.vis_class == 'index':
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}'.format(dir_method, args.vis_class, args.class_id)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}'.format(dir_method, args.vis_class, args.class_id))
+        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id, args.attack_noise)), exist_ok=True)
+        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id, args.attack_noise))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}/{}'.format(dir_method, args.vis_class, ablation_fold)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}/{}'.format(dir_method, args.vis_class, ablation_fold))
+        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class, args.attack_noise, ablation_fold)), exist_ok=True)
+        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class, args.attack_noise, ablation_fold))
 
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
