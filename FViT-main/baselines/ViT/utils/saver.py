@@ -16,6 +16,21 @@ class Saver(object):
         if not os.path.exists(self.experiment_dir):
             os.makedirs(self.experiment_dir)
 
+        self.results_dir = os.path.join(self.experiment_dir, 'results')
+        if not os.path.exists(self.results_dir):
+            os.makedirs(self.results_dir)
+        if not os.path.exists(os.path.join(self.results_dir, 'input')):
+            os.makedirs(os.path.join(self.results_dir, 'input'))
+        if not os.path.exists(os.path.join(self.results_dir, 'explain')):
+            os.makedirs(os.path.join(self.results_dir, 'explain'))
+
+        args.exp_img_path = os.path.join(self.results_dir, 'explain/img')
+        if not os.path.exists(args.exp_img_path):
+            os.makedirs(args.exp_img_path)
+        args.exp_np_path = os.path.join(self.results_dir, 'explain/np')
+        if not os.path.exists(args.exp_np_path):
+            os.makedirs(args.exp_np_path)
+
     def save_checkpoint(self, state, filename='checkpoint.pth.tar'):
         """Saves checkpoint to disk"""
         filename = os.path.join(self.experiment_dir, filename)

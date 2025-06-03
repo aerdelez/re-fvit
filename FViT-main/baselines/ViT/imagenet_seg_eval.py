@@ -22,15 +22,10 @@ from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
 from baselines.ViT.utils.iou import IoU
 
-from baselines.ViT.data.imagenet import Imagenet_Segmentation
+from baselines.ViT.data.data_loader_utils import get_imagenet_dataloader
+from baselines.ViT.utils.model_loader import model_loader
 
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
-# changed these two imports to match demo
-from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
-from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
-from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
-from baselines.ViT.ViT_orig_LRP import vit_base_patch16_224 as vit_orig_LRP
-
 
 from baselines.ViT.DDS import denoise, attack, apply_dds
 
@@ -38,6 +33,7 @@ from sklearn.metrics import precision_recall_curve
 import matplotlib.pyplot as plt
 
 import torch.nn.functional as F
+
 
 plt.switch_backend('agg')
 
@@ -103,7 +99,7 @@ parser.add_argument('--no-reg', action='store_true',
 parser.add_argument('--is-ablation', type=bool,
                     default=False,
                     help='')
-parser.add_argument('--with-dds', action='store_true',
+parser.add_argument('--use-dds', action='store_true',
                     default=False,
                     help='Use DDS')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
@@ -125,63 +121,10 @@ seeder.seed_everything(args.seed)
 
 # Define Saver
 saver = Saver(args)
-saver.results_dir = os.path.join(saver.experiment_dir, 'results')
-if not os.path.exists(saver.results_dir):
-    os.makedirs(saver.results_dir)
-if not os.path.exists(os.path.join(saver.results_dir, 'input')):
-    os.makedirs(os.path.join(saver.results_dir, 'input'))
-if not os.path.exists(os.path.join(saver.results_dir, 'explain')):
-    os.makedirs(os.path.join(saver.results_dir, 'explain'))
 
-args.exp_img_path = os.path.join(saver.results_dir, 'explain/img')
-if not os.path.exists(args.exp_img_path):
-    os.makedirs(args.exp_img_path)
-args.exp_np_path = os.path.join(saver.results_dir, 'explain/np')
-if not os.path.exists(args.exp_np_path):
-    os.makedirs(args.exp_np_path)
+dl = get_imagenet_dataloader(args.imagenet_seg_path, batch_size=batch_size, num_workers=num_workers)
 
-# Data
-normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-test_img_trans = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    normalize,
-])
-test_lbl_trans = transforms.Compose([
-    transforms.Resize((224, 224), Image.NEAREST),
-])
-
-ds = Imagenet_Segmentation(args.imagenet_seg_path,
-                           transform=test_img_trans, target_transform=test_lbl_trans)
-dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
-
-
-if args.implementation_method.lower() == "hu":
-    if args.method == 'attn_gradcam':
-        if args.transformer.lower() == "vit":
-            model = vit_for_cam(pretrained=True).to(device)
-        elif args.transformer.lower() == "deit":
-            model = deit_for_cam(pretrained=True).to(device)
-    elif args.method == 'attr_rollout':
-        if args.transformer.lower() == "vit":
-            model = vit_attr_rollout(pretrained=True).to(device)
-        elif args.transformer.lower() == "deit":
-            model = deit_attr_rollout(pretrained=True).to(device)
-    else:
-        if args.transformer.lower() == "vit":
-            model = vit_base_patch16_224(pretrained=True).to(device)
-        elif args.transformer.lower() == "deit":
-            model = deit_base_distilled_patch16_224(pretrained=True).to(device)
-if args.implementation_method.lower() == "chefer":
-    if args.method in ["full_lrp", "lrp_last_layer", "attn_last_layer"]:
-        model = vit_orig_LRP(pretrained=True).to(device)
-    elif args.method in ["rollout", "attn_gradcam"]:
-        model = vit_for_cam(pretrained=True).to(device)
-    elif args.method == "transformer_attribution":
-        model = vit_base_patch16_224(pretrained=True).to(device)
-else:
-    # invalid implementation_method
-    raise ValueError(f"Invalid implementation_method: {args.implementation_method}.")
+model = model_loader(args.implementation_method, args.method, args.transformer).to(device)
 
 
 model.eval()
@@ -323,7 +266,7 @@ def eval_batch(image, labels, evaluator, index):
             else:
                 raise NotImplementedError(f"Method {args.method} not implemented")
 
-    if args.with_dds:
+    if args.use_dds:
         Res = apply_dds(image, args.attack, gen)
     else:
         Res = gen(image)
