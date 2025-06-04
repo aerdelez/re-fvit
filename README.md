@@ -2,7 +2,7 @@
 
 ## Layout
 
-`FViT-main` is a clone of the `main` branch of the https://github.com/kaustpradalab/FViT repository at commit `860b45f`. It appears that the authors obtained the `baselines/ViT` directory from https://github.com/hila-chefer/Transformer-Explainability and extended it by adding a qualitative demo `fvit-demo.ipynb`. In order to run the demo as well as the segmentation under adversarial attack and classification under perturbation tasks, we applied the aforementioned fixes. We also crated a DDS class (DDS.py) now used in both task scripts and added Attribution Rollout to the image segmentation script as another method.
+`FViT-main` is a clone of the `main` branch of the https://github.com/kaustpradalab/FViT repository at commit `860b45f`. It appears that the authors obtained the `baselines/ViT` directory from https://github.com/hila-chefer/Transformer-Explainability and extended it by adding a qualitative demo `fvit-demo.ipynb`. In order to run the demo as well as the segmentation under adversarial attack and classification under perturbation tasks, we implemented the fixes specified below. We also crated a DDS class (DDS.py), now used in both task scripts as a plug-in, and added Attribution Rollout to the image segmentation script as another method.
 
 ## Code Fixes
 Below are some of the code fixes we applied to the original FViT-main:
