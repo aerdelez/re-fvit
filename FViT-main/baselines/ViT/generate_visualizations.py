@@ -17,12 +17,15 @@ from misc_functions import *
 
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
 
+from baselines.ViT.ViT_new import vit_base_patch16_224 as vit_for_cam, deit_base_distilled_patch16_224 as deit_for_cam
+from baselines.ViT.ViT_LRP import deit_base_distilled_patch16_224, vit_base_patch16_224
+from baselines.ViT.ViT_ig import vit_base_patch16_224 as vit_attr_rollout, deit_base_distilled_patch16_224 as deit_attr_rollout
+
 from baselines.ViT.DDS import apply_dds, attack, denoise, get_opt_t, trans_to_224, trans_to_256
 
 from torchvision.datasets import ImageNet
 
 from baselines.ViT.utils import seeder
-from baselines.ViT.utils.model_loader import model_loader
 from baselines.ViT.data.imagenet import create_balanced_dataset_subset
 from collections import defaultdict
 import pandas as pd
@@ -234,7 +237,21 @@ if __name__ == "__main__":
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
 
-    model = model_loader(implementation_method="hu", method=args.method, transformer=args.transformer).to(device)
+    if args.method == 'attn_gradcam':
+        if args.transformer.lower() == "vit":
+            model = vit_for_cam(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_for_cam(pretrained=True).to(device)
+    elif args.method == 'attr_rollout':
+        if args.transformer.lower() == "vit":
+            model = vit_attr_rollout(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_attr_rollout(pretrained=True).to(device)
+    else:
+        if args.transformer.lower() == "vit":
+            model = vit_base_patch16_224(pretrained=True).to(device)
+        elif args.transformer.lower() == "deit":
+            model = deit_base_distilled_patch16_224(pretrained=True).to(device)
 
     # Model
     baselines = Baselines(model)
