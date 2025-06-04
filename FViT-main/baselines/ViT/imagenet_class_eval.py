@@ -21,7 +21,7 @@ from baselines.ViT.utils import render
 from baselines.ViT.utils.saver import Saver
 from baselines.ViT.utils.iou import IoU
 
-from baselines.ViT.data.imagenet import Imagenet_Segmentation
+from baselines.ViT.data.data_loader_utils import get_imagenet_dataloader
 
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP
 # changed these two imports to match demo
@@ -40,7 +40,7 @@ plt.switch_backend('agg')
 
 
 # hyperparameters
-num_workers = 0
+num_workers = 1
 batch_size = 1
 
 cls = ['airplane',
@@ -114,35 +114,8 @@ device = torch.device("cuda" if cuda else "cpu")
 
 # Define Saver
 saver = Saver(args)
-saver.results_dir = os.path.join(saver.experiment_dir, 'results')
-if not os.path.exists(saver.results_dir):
-    os.makedirs(saver.results_dir)
-if not os.path.exists(os.path.join(saver.results_dir, 'input')):
-    os.makedirs(os.path.join(saver.results_dir, 'input'))
-if not os.path.exists(os.path.join(saver.results_dir, 'explain')):
-    os.makedirs(os.path.join(saver.results_dir, 'explain'))
 
-args.exp_img_path = os.path.join(saver.results_dir, 'explain/img')
-if not os.path.exists(args.exp_img_path):
-    os.makedirs(args.exp_img_path)
-args.exp_np_path = os.path.join(saver.results_dir, 'explain/np')
-if not os.path.exists(args.exp_np_path):
-    os.makedirs(args.exp_np_path)
-
-# Data
-normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-test_img_trans = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    normalize,
-])
-test_lbl_trans = transforms.Compose([
-    transforms.Resize((224, 224), Image.NEAREST),
-])
-
-ds = Imagenet_Segmentation(args.imagenet_seg_path,
-                           transform=test_img_trans, target_transform=test_lbl_trans)
-dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False)
+dl = get_imagenet_dataloader(args.imagenet_seg_path, batch_size=batch_size, num_workers=num_workers)
 
 # Model
 model = vit_for_cam(pretrained=True).cuda()
