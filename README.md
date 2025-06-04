@@ -1,7 +1,7 @@
 # fact-ai
 
 ## Code Fixes
-
+Below are some of the code fixes we applied to the original FViT-main:
 1. Removed package versions from env.yaml file to make compatible.
 2. Removed `backports-zoneinfo` (incompatible with newer Python versions) and `guided-diffusion` (must be installed locally) packages from env.yaml file.
 3. Added `modules/`, `utils/` and other modules from https://github.com/hila-chefer/Transformer-Explainability since the scripts import them.
