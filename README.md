@@ -33,14 +33,14 @@ Below are some of the code fixes we applied to the original FViT-main:
 
 1. Download the ImageNet segmentation dataset (`gtsegs_ijcv.mat`) from https://calvin-vision.net/bigstuff/proj-imagenet/data/gtsegs_ijcv.mat. When running `imagenet_seg_eval.py`, specify path to this file.
 
-2. Go to the `FViT-main` directory and run `python -W ignore /root/fact/fact-ai/FViT-main/baselines/ViT/imagenet_seg_eval.py --imagenet-seg-path gtsegs_ijcv.mat --method=<method> --attack --attack_noise=<attack_noise>`. `-W ignore` removes the `UndefinedWarning`s of computing the F1-score. `--method` argument specifies the interpretability method used for segmentation, options include `'rollout', 'lrp', 'transformer_attribution', 'full_lrp', 'lrp_last_layer', 'attn_last_layer', 'attn_gradcam', 'dds', 'attr_rollout', 'attr_rollout_dds'`. `--attack` flag should be included if one wishes to replicate the method's perfomance under PGD attack with possibility of setting `--attack_noise` to any float value, which defaults to Hu's default of 8/255.
+2. Go to the `FViT-main` directory and run `python -W ignore baselines/ViT/imagenet_seg_eval.py --transformer={vit|deit} --imagenet-seg-path=gtsegs_ijcv.mat --method=<method> [--attack [--attack_noise=<attack_noise>]] [--with-dds]`. `--method` argument specifies the interpretability method used for segmentation. `--attack` flag should be included if one wishes to replicate the method's perfomance under PGD attack with possibility of setting `--attack_noise` to any float value, which defaults to Hu's default of 8/255.
 
 
 ## Running the Image Perturbation Task
 1. Download ImageNet DevKit(?) with `wget https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz`.
 
-2. Download ImageNet Validation Set from https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5 and place it in the same directory as the ImageNet Devkit; a torrent utility is necessary for this source.
+2. Download ImageNet Validation Set from `https://academictorrents.com/details/5d6d0df7ed81efd49ca99ea4737e0ae5e3a5f2e5` and place it in the same directory as the ImageNet Devkit; a torrent utility is necessary for this source.
 
-3. Go to `FViT-main` and run `python baselines/ViT/generate_visualizations.py --imagenet-validation-path ~/path-from-home-to-imagenet-files/ --method chosen-method imagenet-subset-ratio subset-ratio`. This creates the visualizations needed for the perturbation task. The `--imagenet-validation-path` argument needs to specify a path to the two (compressed) ImageNet files. The `subset-ratio` specifies what portion of the ImageNet dataset is used (between 0 and 1).
+3. Go to `FViT-main` and run `python baselines/ViT/generate_visualizations.py --imagenet-validation-path=~/path-from-home-to-imagenet-files/ --method=<method> --imagenet-subset-ratio=<subset-ratio> [--attack [--attack_noise=<attack_noise>]] [--use-dds]`. This creates the visualizations needed for the perturbation task. The `--imagenet-validation-path` argument needs to specify a path to the two (compressed) ImageNet files. The `subset-ratio` specifies what portion of the ImageNet dataset is used (between 0 and 1). 
 
-4. Run the perturbation test with `python baselines/ViT/pertubation_eval_from_hdf5.py --method chosen-method --use-dds`. Other flags may be modified. `--use-dds` specifies whether to use DDS with the chosen method.
+4. Run the perturbation test with `python baselines/ViT/pertubation_eval_from_hdf5.py --method=<method> [--attack_noise=<attack_noise>] [--use-dds] [--neg]`. `--neg` determines whether negative (or positive) perturbation is applied.
