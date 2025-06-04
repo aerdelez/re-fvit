@@ -205,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=44)
     parser.add_argument('--imagenet-subset-ratio', type=float, default=1)
     parser.add_argument('--attack', action='store_true', default=False)
-    parser.add_argument('--attack_noise', type=float, default=0)
+    parser.add_argument('--attack-noise', type=float, default=0)
     parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
     parser.add_argument('--use-dds', action='store_true', default=False, help='Use DDS')
     args = parser.parse_args()

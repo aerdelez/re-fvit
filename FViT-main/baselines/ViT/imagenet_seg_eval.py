@@ -106,7 +106,7 @@ parser.add_argument('--use-dds', action='store_true',
                     help='Use DDS')
 parser.add_argument('--imagenet-seg-path', type=str, required=True)
 parser.add_argument('--attack', action='store_true', default=False)
-parser.add_argument('--attack_noise', type=float, default=8 / 255)
+parser.add_argument('--attack-noise', type=float, default=8 / 255)
 parser.add_argument('--seed', type=int, default=44)
 parser.add_argument("--transformer", type=str, default="ViT", help='Currently supports ViT and DeiT')
 parser.add_argument("--implementation-method", type=str, default="Hu", help="Hu or Chefer")
