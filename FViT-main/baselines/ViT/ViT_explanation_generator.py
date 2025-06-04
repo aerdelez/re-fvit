@@ -89,11 +89,12 @@ class IG:
         self.model = model
         self.model.eval()
 
-    def generate_ig(self, input):
+    def generate_ig(self, input, index=None):
         output = self.model(input.cuda(), register_hook=True, retain_graph=True)
         blocks = self.model.blocks
         all_layer_attentions = []
-        index = np.argmax(output.cpu().data.numpy(), axis=-1)
+        if index == None:
+            index = np.argmax(output.cpu().data.numpy(), axis=-1)
         heads = 12
         m = 20
         steps = 20

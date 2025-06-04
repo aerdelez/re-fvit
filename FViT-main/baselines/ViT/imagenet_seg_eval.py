@@ -18,6 +18,8 @@ parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir)
 
+from baselines.ViT.utils.metrices import *
+
 from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.saver import Saver
 from baselines.ViT.utils.iou import IoU
