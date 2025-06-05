@@ -1,24 +1,20 @@
-import torch
-import os
-from tqdm import tqdm
-import numpy as np
 import argparse
-
+import glob
+import inspect
 import os
 import sys
-import inspect
+
+import numpy as np
+import torch
+from tqdm import tqdm
+
+from baselines.ViT.utils.model_loader import model_loader
+from dataset.expl_hdf5 import ImagenetResults
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir)
-
-
-from baselines.ViT.utils.model_loader import model_loader
-
-import glob
-
-from dataset.expl_hdf5 import ImagenetResults
 
 
 def normalize(tensor,

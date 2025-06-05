@@ -1,31 +1,23 @@
-import os
-from tqdm import tqdm
-import h5py
-
 import argparse
-
+import inspect
 import os
 import sys
-import inspect
+
+import h5py
+from torchvision.datasets import ImageNet
+from tqdm import tqdm
+
+from baselines.ViT.DDS import apply_dds, attack
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
+from baselines.ViT.data.imagenet import create_balanced_dataset_subset
+from baselines.ViT.utils import seeder
+from baselines.ViT.utils.model_loader import model_loader
+from misc_functions import *
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
-sys.path.insert(0, parentdir) 
-
-# Import saliency methods and models
-from misc_functions import *
-
-from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
-
-from baselines.ViT.DDS import apply_dds, attack, denoise, get_opt_t, trans_to_224, trans_to_256
-
-from torchvision.datasets import ImageNet
-
-from baselines.ViT.utils import seeder
-from baselines.ViT.utils.model_loader import model_loader
-from baselines.ViT.data.imagenet import create_balanced_dataset_subset
-from collections import defaultdict
-import pandas as pd
+sys.path.insert(0, parentdir)
 
 
 def normalize(tensor,
@@ -97,37 +89,45 @@ def compute_saliency_and_save(args):
             # perturbation test for the rollout baseline
             if args.method == 'rollout':
                 def gen(image):
-                    return lrp.generate_LRP(image.to(device), method="rollout", start_layer=1).reshape(args.batch_size, 1, 14, 14)
+                    return lrp.generate_LRP(image.to(device), method="rollout", start_layer=1).reshape(args.batch_size,
+                                                                                                       1, 14, 14)
 
             # perturbation test for the LRP baseline (this is full LRP, not partial)
             elif args.method == 'full_lrp':
                 def gen(image):
-                    return lrp.generate_LRP(image.to(device), method="full", index=index, start_layer=1).reshape(args.batch_size, 1, 224, 224)
+                    return lrp.generate_LRP(image.to(device), method="full", index=index, start_layer=1).reshape(
+                        args.batch_size, 1, 224, 224)
 
             # perturbation test for our method
             elif args.method == 'transformer_attribution':
                 def gen(image):
-                    return (lrp.generate_LRP(image.to(device), start_layer=1, index=index, method="transformer_attribution").reshape(args.batch_size, 1, 14, 14))
+                    return (lrp.generate_LRP(image.to(device), start_layer=1, index=index,
+                                             method="transformer_attribution").reshape(args.batch_size, 1, 14, 14))
 
             # perturbation test for the partial LRP baseline (last attn layer)
             elif args.method == 'lrp_last_layer':
                 def gen(image):
-                    return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation, index=index).reshape(args.batch_size, 1, 14, 14))
+                    return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation,
+                                             index=index).reshape(args.batch_size, 1, 14, 14))
 
             # perturbation test for the raw attention baseline (last attn layer)
             elif args.method == 'attn_last_layer':
                 def gen(image):
-                    return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation, index=index).reshape(args.batch_size, 1, 14, 14))
+                    return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation,
+                                             index=index).reshape(args.batch_size, 1, 14, 14))
 
             # perturbation test for the GradCam baseline (last attn layer)
             elif args.method == 'attn_gradcam':
                 # could be different look demo
                 def gen(image):
-                    return baselines.generate_cam_attn(image.to(device), index=index).reshape(args.batch_size, 1, 14, 14)
+                    return baselines.generate_cam_attn(image.to(device), index=index).reshape(args.batch_size, 1, 14,
+                                                                                              14)
 
             elif args.method == 'attr_rollout':
                 def gen(image):
-                    return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:].reshape(args.batch_size, 1, 14, 14))
+                    return (
+                        compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:].reshape(args.batch_size, 1,
+                                                                                                  14, 14))
             else:
                 raise NotImplementedError(f'Method {args.method} not implemented')
 
@@ -149,7 +149,7 @@ def compute_saliency_and_save(args):
             if Res.shape[-1] != 224:
                 # interpolate to full image size (224,224)
                 Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
-            
+
             Res = (Res - Res.min()) / (Res.max() - Res.min())
 
             data_cam[-data.shape[0]:] = Res.data.cpu().numpy()
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                         default='grad_rollout',
                         choices=['rollout', 'lrp', 'transformer_attribution', 'lrp_last_layer',
                                  'attn_last_layer', 'attn_gradcam', 'attr_rollout',
-                                #  'full_lrp', 
+                                 #  'full_lrp',
                                  'dds_rollout', 'dds_lrp', 'dds_transformer_attribution', 'dds_lrp_last_layer',
                                  'dds_attn_last_layer', 'dds_attn_gradcam', 'dds_attr_rollout'],
                         help='')
@@ -224,12 +224,18 @@ if __name__ == "__main__":
 
     os.makedirs(os.path.join(PATH, 'visualizations/{}'.format(dir_method)), exist_ok=True)
     if args.vis_class == 'index':
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id, args.attack_noise)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id, args.attack_noise))
+        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id,
+                                                                           args.attack_noise)), exist_ok=True)
+        args.method_dir = os.path.join(PATH,
+                                       'visualizations/{}/{}_{}_{}'.format(dir_method, args.vis_class, args.class_id,
+                                                                           args.attack_noise))
     else:
         ablation_fold = 'ablation' if args.is_ablation else 'not_ablation'
-        os.makedirs(os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class, args.attack_noise, ablation_fold)), exist_ok=True)
-        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class, args.attack_noise, ablation_fold))
+        os.makedirs(os.path.join(PATH,
+                                 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class, args.attack_noise,
+                                                                     ablation_fold)), exist_ok=True)
+        args.method_dir = os.path.join(PATH, 'visualizations/{}/{}_{}/{}'.format(dir_method, args.vis_class,
+                                                                                 args.attack_noise, ablation_fold))
 
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")

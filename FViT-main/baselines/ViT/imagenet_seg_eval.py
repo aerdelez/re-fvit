@@ -1,41 +1,31 @@
-import numpy as np
-import torch
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-from numpy import *
 import argparse
-from PIL import Image
-import imageio
+import inspect
 import os
 import sys
-import inspect
+
+import imageio
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
+from PIL import Image
+from sklearn.metrics import precision_recall_curve
 from tqdm import tqdm
+
+from baselines.ViT.DDS import attack, apply_dds
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
+from baselines.ViT.data.data_loader_utils import get_imagenet_dataloader
+from baselines.ViT.utils import render, seeder
+from baselines.ViT.utils.iou import IoU
+from baselines.ViT.utils.model_loader import model_loader
+from baselines.ViT.utils.saver import Saver
+
 from utils.metrices import *
-import timm
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 parentdir = os.path.dirname(parentdir)
 sys.path.insert(0, parentdir)
-
-from baselines.ViT.utils.metrices import *
-
-from baselines.ViT.utils import render, seeder
-from baselines.ViT.utils.saver import Saver
-from baselines.ViT.utils.iou import IoU
-
-from baselines.ViT.data.data_loader_utils import get_imagenet_dataloader
-from baselines.ViT.utils.model_loader import model_loader
-
-from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
-
-from baselines.ViT.DDS import denoise, attack, apply_dds
-
-from sklearn.metrics import precision_recall_curve
-import matplotlib.pyplot as plt
-
-import torch.nn.functional as F
-
 
 plt.switch_backend('agg')
 
@@ -127,7 +117,6 @@ saver = Saver(args)
 dl = get_imagenet_dataloader(args.imagenet_seg_path, batch_size=batch_size, num_workers=num_workers)
 
 model = model_loader(args.implementation_method, args.method, args.transformer).to(device)
-
 
 model.eval()
 print(model)
