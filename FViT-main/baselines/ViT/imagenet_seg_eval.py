@@ -14,12 +14,12 @@ from tqdm import tqdm
 
 from baselines.ViT.DDS import attack, apply_dds
 from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
+from baselines.ViT.ViT_explanation_generator import compute_rollout_attention
 from baselines.ViT.data.data_loader_utils import get_imagenet_dataloader
 from baselines.ViT.utils import render, seeder
 from baselines.ViT.utils.iou import IoU
 from baselines.ViT.utils.model_loader import model_loader
 from baselines.ViT.utils.saver import Saver
-
 from utils.metrices import *
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -137,20 +137,6 @@ iterator = tqdm(dl)
 model.eval()
 
 
-def compute_rollout_attention(all_layer_matrices, start_layer=0):
-    # adding residual consideration- code adapted from https://github.com/samiraabnar/attention_flow
-    num_tokens = all_layer_matrices[0].shape[1]
-    batch_size = all_layer_matrices[0].shape[0]
-    eye = torch.eye(num_tokens).expand(batch_size, num_tokens, num_tokens).to(all_layer_matrices[0].device)
-    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
-    matrices_aug = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
-                    for i in range(len(all_layer_matrices))]
-    joint_attention = matrices_aug[start_layer]
-    for i in range(start_layer + 1, len(matrices_aug)):
-        joint_attention = matrices_aug[i].bmm(joint_attention)
-    return joint_attention
-
-
 def compute_pred(output):
     pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
     # pred[0, 0] = 282
@@ -186,46 +172,40 @@ def eval_batch(image, labels, evaluator, index):
 
     if args.implementation_method.lower() == "hu":
         # segmentation test for the rollout baseline
-        if args.method == 'rollout':
-            def gen(image):
+        def gen(image):
+            if args.method == 'rollout':
                 return lrp.generate_LRP(image.to(device), method="rollout").reshape(batch_size, 1, 14, 14)
 
-        # segmentation test for the LRP baseline (this is full LRP, not partial)
-        elif args.method == 'full_lrp':
-            def gen(image):
+            # segmentation test for the LRP baseline (this is full LRP, not partial)
+            elif args.method == 'full_lrp':
                 return lrp.generate_LRP(image.to(device), method="full").reshape(batch_size, 1, 224, 224)
 
-        # segmentation test for our method
-        elif args.method == 'transformer_attribution':
-            def gen(image):
+            # segmentation test for our method
+            elif args.method == 'transformer_attribution':
                 return (lrp.generate_LRP(image.to(device), start_layer=1, method="transformer_attribution")
                         .reshape(batch_size, 1, 14, 14))
 
-        # segmentation test for the partial LRP baseline (last attn layer)
-        elif args.method == 'lrp_last_layer':
-            def gen(image):
+            # segmentation test for the partial LRP baseline (last attn layer)
+            elif args.method == 'lrp_last_layer':
                 return (lrp.generate_LRP(image.to(device), method="last_layer", is_ablation=args.is_ablation)
                         .reshape(batch_size, 1, 14, 14))
 
-        # segmentation test for the raw attention baseline (last attn layer)
-        elif args.method == 'attn_last_layer':
-            def gen(image):
+            # segmentation test for the raw attention baseline (last attn layer)
+            elif args.method == 'attn_last_layer':
                 return (lrp.generate_LRP(image.to(device), method="last_layer_attn", is_ablation=args.is_ablation)
                         .reshape(batch_size, 1, 14, 14))
 
-        # segmentation test for the GradCam baseline (last attn layer)
-        elif args.method == 'attn_gradcam':
-            # could be different look demo
-            def gen(image):
+            # segmentation test for the GradCam baseline (last attn layer)
+            elif args.method == 'attn_gradcam':
+                # could be different look demo
                 return baselines.generate_cam_attn(image.to(device)).reshape(batch_size, 1, 14, 14)
 
-        elif args.method == 'attr_rollout':
-            def gen(image):
+            elif args.method == 'attr_rollout':
                 return (compute_rollout_attention(ig.generate_ig(image.cuda()))[:, 0, 1:]
                         .reshape(batch_size, 1, 14, 14))
+            else:
+                raise NotImplementedError(f'Method {args.method} not implemented')
 
-        else:
-            raise NotImplementedError(f'Method {args.method} not implemented')
     elif args.implementation_method.lower() == "chefer":
         def gen(image):
             if args.method == 'rollout':
@@ -256,27 +236,29 @@ def eval_batch(image, labels, evaluator, index):
 
             else:
                 raise NotImplementedError(f"Method {args.method} not implemented")
+    else:
+        raise NotImplementedError(f"Implementation method {args.implementation_method} not implemented")
 
     if args.use_dds:
-        Res = apply_dds(image, args.attack, gen)
+        res = apply_dds(image, args.attack, gen)
     else:
-        Res = gen(image)
+        res = gen(image)
 
-    if Res.shape[-1] != 224:
+    if res.shape[-1] != 224:
         # interpolate to full image size (224,224)
-        Res = torch.nn.functional.interpolate(Res, scale_factor=16, mode='bilinear').to(device)
+        res = torch.nn.functional.interpolate(res, scale_factor=16, mode='bilinear').to(device)
 
-    # threshold between FG and BG is the mean    
-    Res = (Res - Res.min()) / (Res.max() - Res.min())
+    # threshold between FG and BG is the mean
+    res = (res - res.min()) / (res.max() - res.min())
 
     # I think this is necessary for segmentation eval, hence not in the demo
-    ret = Res.mean()
+    ret = res.mean()
 
-    Res_1 = Res.gt(ret).type(Res.type())
-    Res_0 = Res.le(ret).type(Res.type())
+    Res_1 = res.gt(ret).type(res.type())
+    Res_0 = res.le(ret).type(res.type())
 
-    Res_1_AP = Res
-    Res_0_AP = 1 - Res
+    Res_1_AP = res
+    Res_0_AP = 1 - res
 
     Res_1[Res_1 != Res_1] = 0
     Res_0[Res_0 != Res_0] = 0
@@ -284,7 +266,7 @@ def eval_batch(image, labels, evaluator, index):
     Res_0_AP[Res_0_AP != Res_0_AP] = 0
 
     # TEST
-    pred = Res.clamp(min=args.thr) / Res.max()
+    pred = res.clamp(min=args.thr) / res.max()
     pred = pred.view(-1).data.cpu().numpy()
     target = labels.view(-1).data.cpu().numpy()
     # print("target", target.shape)
@@ -301,9 +283,9 @@ def eval_batch(image, labels, evaluator, index):
         mask = mask.astype('uint8')
         imageio.imsave(os.path.join(args.exp_img_path, 'mask_' + str(index) + '.jpg'), mask)
 
-        relevance = F.interpolate(Res, [64, 64], mode='bilinear')
+        relevance = F.interpolate(res, [64, 64], mode='bilinear')
         relevance = relevance[0].permute(1, 2, 0).data.cpu().numpy()
-        # relevance = Res[0].permute(1, 2, 0).data.cpu().numpy()
+        # relevance = res[0].permute(1, 2, 0).data.cpu().numpy()
         hm = np.sum(relevance, axis=-1)
         maps = (render.hm_to_rgb(hm, scaling=3, sigma=1, cmap='seismic') * 255).astype(np.uint8)
         imageio.imsave(os.path.join(args.exp_img_path, 'heatmap_' + str(index) + '.jpg'), maps)
