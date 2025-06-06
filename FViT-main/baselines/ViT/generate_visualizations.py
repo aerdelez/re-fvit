@@ -4,11 +4,12 @@ import os
 import sys
 
 import h5py
+import torch
 from torchvision.datasets import ImageNet
 from tqdm import tqdm
 
 from baselines.ViT.DDS import apply_dds, attack
-from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG
+from baselines.ViT.ViT_explanation_generator import Baselines, LRP, IG, compute_rollout_attention
 from baselines.ViT.data.imagenet import create_balanced_dataset_subset
 from baselines.ViT.utils import seeder
 from baselines.ViT.utils.model_loader import model_loader
@@ -27,20 +28,6 @@ def normalize(tensor,
     std = torch.as_tensor(std, dtype=dtype, device=tensor.device)
     tensor.sub_(mean[None, :, None, None]).div_(std[None, :, None, None])
     return tensor
-
-
-def compute_rollout_attention(all_layer_matrices, start_layer=0):
-    # adding residual consideration- code adapted from https://github.com/samiraabnar/attention_flow
-    num_tokens = all_layer_matrices[0].shape[1]
-    batch_size = all_layer_matrices[0].shape[0]
-    eye = torch.eye(num_tokens).expand(batch_size, num_tokens, num_tokens).to(all_layer_matrices[0].device)
-    all_layer_matrices = [all_layer_matrices[i] + eye for i in range(len(all_layer_matrices))]
-    matrices_aug = [all_layer_matrices[i] / all_layer_matrices[i].sum(dim=-1, keepdim=True)
-                    for i in range(len(all_layer_matrices))]
-    joint_attention = matrices_aug[start_layer]
-    for i in range(start_layer + 1, len(matrices_aug)):
-        joint_attention = matrices_aug[i].bmm(joint_attention)
-    return joint_attention
 
 
 def compute_saliency_and_save(args):
@@ -251,24 +238,6 @@ if __name__ == "__main__":
     # attribution rollout
     ig = IG(model)
 
-    # Model
-    # model = vit_base_patch16_224(pretrained=True).cuda()
-    # baselines = Baselines(model)
-    # model = vit_for_cam(pretrained=True).cuda()
-    # baselines = Baselines(model)
-
-    # LRP
-    # model_LRP = vit_LRP(pretrained=True).cuda()
-    # model_LRP.eval()
-    # lrp = LRP(model_LRP)
-    # model = vit_base_patch16_224(pretrained=True).cuda()
-    # lrp = LRP(model)
-
-    # orig LRP
-    # model_orig_LRP = vit_orig_LRP(pretrained=True).cuda()
-    # model_orig_LRP.eval()
-    # orig_lrp = LRP(model_orig_LRP)
-
     # Dataset loader for sample images
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -294,13 +263,5 @@ if __name__ == "__main__":
     )
 
     print(f"Imagenet size: {len(sample_loader)}")
-    # class_counts = defaultdict(int)
-    # df_dict = dict()
-    # for _, labels in sample_loader:
-    #     for label in labels:
-    #         class_counts[label.item()] += 1
-    # for class_idx, count in class_counts.items():
-    #     df_dict[imagenet_ds.classes[class_idx]] = count
-    # print(df_dict)
 
     compute_saliency_and_save(args)
